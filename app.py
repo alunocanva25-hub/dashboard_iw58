@@ -6,27 +6,34 @@ from io import BytesIO
 # ======================================================
 # CONFIGURAÇÃO DA PÁGINA
 # ======================================================
-st.set_page_config(page_title="Dashboard IW58", layout="wide")
+st.set_page_config(
+    page_title="Dashboard IW58",
+    layout="wide"
+)
 
 # ======================================================
 # LOGIN
 # ======================================================
 def tela_login():
     st.markdown("## 🔐 Acesso Restrito")
+
     usuario = st.text_input("Usuário")
     senha = st.text_input("Senha", type="password")
 
     if st.button("Entrar"):
-        if usuario == st.secrets["auth"]["usuario"] and senha == st.secrets["auth"]["senha"]:
-            st.session_state.logado = True
+        if (
+            usuario == st.secrets["auth"]["usuario"]
+            and senha == st.secrets["auth"]["senha"]
+        ):
+            st.session_state["logado"] = True
             st.rerun()
         else:
             st.error("Usuário ou senha inválidos")
 
 if "logado" not in st.session_state:
-    st.session_state.logado = False
+    st.session_state["logado"] = False
 
-if not st.session_state.logado:
+if not st.session_state["logado"]:
     tela_login()
     st.stop()
 
@@ -36,17 +43,17 @@ if not st.session_state.logado:
 st.title("📊 Dashboard IW58 – AM x AS")
 
 # ======================================================
-# FUNÇÃO COLUNA
+# FUNÇÃO PARA IDENTIFICAR COLUNAS
 # ======================================================
 def achar_coluna(df, palavras):
-    for c in df.columns:
-        for p in palavras:
-            if p in c:
-                return c
+    for coluna in df.columns:
+        for palavra in palavras:
+            if palavra in coluna:
+                return coluna
     return None
 
 # ======================================================
-# BASE (GOOGLE DRIVE)
+# CARREGAMENTO DA BASE (GOOGLE DRIVE)
 # ======================================================
 @st.cache_data
 def carregar_base():
@@ -58,7 +65,7 @@ def carregar_base():
 df = carregar_base()
 
 # ======================================================
-# COLUNAS
+# IDENTIFICAÇÃO DAS COLUNAS
 # ======================================================
 COL_ESTADO = achar_coluna(df, ["ESTADO", "LOCALIDADE", "UF"])
 COL_RESULTADO = achar_coluna(df, ["RESULTADO"])
@@ -67,39 +74,43 @@ COL_MOTIVO = achar_coluna(df, ["MOTIVO"])
 COL_REGIONAL = achar_coluna(df, ["REGIONAL"])
 COL_DATA = achar_coluna(df, ["DATA"])
 
-obrigatorias = [COL_ESTADO, COL_RESULTADO, COL_TIPO, COL_DATA]
-if any(c is None for c in obrigatorias):
-    st.error("❌ A base não contém todas as colunas obrigatórias.")
+if not COL_ESTADO or not COL_RESULTADO or not COL_TIPO or not COL_DATA:
+    st.error("Colunas obrigatórias não encontradas.")
     st.stop()
 
 # ======================================================
-# DATA
+# TRATAMENTO DE DATA
 # ======================================================
 df[COL_DATA] = pd.to_datetime(df[COL_DATA], errors="coerce")
+df["MES"] = df[COL_DATA].dt.month
+df["ANO"] = df[COL_DATA].dt.year
 df["MES_ANO"] = df[COL_DATA].dt.strftime("%b/%Y")
 
 # ======================================================
-# FILTRO ESTADO
+# FILTRO POR ESTADO (BOTÕES)
 # ======================================================
 st.subheader("📍 Localidade")
-estados = ["TOTAL"] + sorted(df[COL_ESTADO].dropna().unique().tolist())
+
+estados = sorted(df[COL_ESTADO].dropna().unique().tolist())
+estados = ["TOTAL"] + estados
 
 if "estado_sel" not in st.session_state:
     st.session_state.estado_sel = "TOTAL"
 
 cols = st.columns(len(estados))
-for i, e in enumerate(estados):
-    if cols[i].button(e):
-        st.session_state.estado_sel = e
+for i, est in enumerate(estados):
+    if cols[i].button(est):
+        st.session_state.estado_sel = est
 
 estado = st.session_state.estado_sel
+
 df_filtro = df if estado == "TOTAL" else df[df[COL_ESTADO] == estado]
 
 # ======================================================
-# AM / AS
+# SEPARAÇÃO AM / AS
 # ======================================================
-df_am = df_filtro[df_filtro[COL_TIPO].astype(str).str.contains("AM", na=False)]
-df_as = df_filtro[df_filtro[COL_TIPO].astype(str).str.contains("AS", na=False)]
+df_am = df_filtro[df_filtro[COL_TIPO].str.contains("AM", na=False)]
+df_as = df_filtro[df_filtro[COL_TIPO].str.contains("AS", na=False)]
 
 # ======================================================
 # KPIs
@@ -110,22 +121,18 @@ k2.metric("Total AM", len(df_am))
 k3.metric("Total AS", len(df_as))
 
 # ======================================================
-# DONUT SEGURO
+# FUNÇÃO – DONUT RESULTADO
 # ======================================================
-def donut_seguro(df_base, titulo):
-    if df_base.empty:
-        st.info(f"Sem dados para {titulo}")
-        return
+def donut_resultado(df_base, titulo):
+    proc = df_base[COL_RESULTADO].str.contains("PROCEDENTE", na=False).sum()
+    improc = df_base[COL_RESULTADO].str.contains("IMPROCEDENTE", na=False).sum()
 
-    dados = (
-        df_base[COL_RESULTADO]
-        .dropna()
-        .value_counts()
-        .reset_index()
-    )
-    dados.columns = ["Resultado", "Quantidade"]
+    dados = pd.DataFrame({
+        "Resultado": ["Procedente", "Improcedente"],
+        "Quantidade": [proc, improc]
+    })
 
-    fig = px.pie(
+    return px.pie(
         dados,
         names="Resultado",
         values="Quantidade",
@@ -133,45 +140,155 @@ def donut_seguro(df_base, titulo):
         title=titulo,
         template="plotly_dark"
     )
-    st.plotly_chart(fig, use_container_width=True)
-
-c1, c2 = st.columns(2)
-with c1:
-    donut_seguro(df_am, f"AM – {estado}")
-with c2:
-    donut_seguro(df_as, f"AS – {estado}")
 
 # ======================================================
-# EXPORTAÇÃO (100% ESTÁVEL)
+# LINHA 1 — DONUTS
+# ======================================================
+c1, c2 = st.columns(2)
+c1.plotly_chart(donut_resultado(df_am, f"AM – {estado}"), use_container_width=True)
+c2.plotly_chart(donut_resultado(df_as, f"AS – {estado}"), use_container_width=True)
+
+# ======================================================
+# FUNÇÃO – MOTIVOS (BARRAS)
+# ======================================================
+def grafico_motivos(df_base, titulo):
+    if not COL_MOTIVO:
+        return None
+
+    dados = (
+        df_base.groupby(COL_MOTIVO)
+        .size()
+        .reset_index(name="Quantidade")
+        .sort_values("Quantidade")
+    )
+
+    dados["Percentual"] = (dados["Quantidade"] / dados["Quantidade"].sum() * 100).round(1)
+    dados["Label"] = dados["Quantidade"].astype(str) + " (" + dados["Percentual"].astype(str) + "%)"
+
+    fig = px.bar(
+        dados,
+        x="Quantidade",
+        y=COL_MOTIVO,
+        orientation="h",
+        text="Label",
+        title=titulo,
+        template="plotly_dark"
+    )
+
+    fig.update_traces(textposition="outside")
+    fig.update_layout(showlegend=False)
+
+    return fig
+
+# ======================================================
+# LINHA 2 — MOTIVOS
+# ======================================================
+c3, c4 = st.columns(2)
+c3.plotly_chart(grafico_motivos(df_am, f"Motivos AM – {estado}"), use_container_width=True)
+c4.plotly_chart(grafico_motivos(df_as, f"Motivos AS – {estado}"), use_container_width=True)
+
+# ======================================================
+# FUNÇÃO – IMPROCEDENTE POR REGIONAL
+# ======================================================
+def improcedente_regional(df_base, titulo):
+    if not COL_REGIONAL:
+        return None
+
+    base = df_base[df_base[COL_RESULTADO].str.contains("IMPROCEDENTE", na=False)]
+
+    dados = (
+        base.groupby(COL_REGIONAL)
+        .size()
+        .reset_index(name="Quantidade")
+        .sort_values("Quantidade")
+    )
+
+    fig = px.bar(
+        dados,
+        x="Quantidade",
+        y=COL_REGIONAL,
+        orientation="h",
+        text="Quantidade",
+        title=titulo,
+        template="plotly_dark"
+    )
+
+    fig.update_traces(textposition="outside")
+    fig.update_layout(showlegend=False)
+
+    return fig
+
+# ======================================================
+# LINHA 3 — REGIONAL
+# ======================================================
+c5, c6 = st.columns(2)
+c5.plotly_chart(improcedente_regional(df_am, f"Improcedente Regional AM – {estado}"), use_container_width=True)
+c6.plotly_chart(improcedente_regional(df_as, f"Improcedente Regional AS – {estado}"), use_container_width=True)
+
+# ======================================================
+# FUNÇÃO – EVOLUÇÃO MENSAL
+# ======================================================
+def evolucao_mensal(df_base):
+    dados = (
+        df_base.groupby(["MES_ANO", COL_TIPO])
+        .size()
+        .reset_index(name="Quantidade")
+        .sort_values("MES_ANO")
+    )
+
+    total_mes = dados.groupby("MES_ANO")["Quantidade"].transform("sum")
+    dados["Percentual"] = (dados["Quantidade"] / total_mes * 100).round(1)
+    dados["Label"] = dados["Quantidade"].astype(str) + " (" + dados["Percentual"].astype(str) + "%)"
+
+    fig = px.bar(
+        dados,
+        x="MES_ANO",
+        y="Quantidade",
+        color=COL_TIPO,
+        barmode="group",
+        text="Label",
+        title="📅 AM x AS por Mês",
+        template="plotly_dark"
+    )
+
+    fig.update_traces(textposition="outside")
+    fig.update_layout(
+        xaxis_title="Mês",
+        yaxis_title="Quantidade"
+    )
+
+    return fig
+
+# ======================================================
+# LINHA 4 — EVOLUÇÃO MENSAL
+# ======================================================
+st.plotly_chart(evolucao_mensal(df_filtro), use_container_width=True)
+
+# ======================================================
+# BASE FINAL
 # ======================================================
 st.subheader("📤 Exportar Dados")
 
-def gerar_excel(df):
+c1, c2 = st.columns(2)
+
+# ================= CSV =================
+with c1:
+    st.download_button(
+        label="⬇️ Baixar CSV",
+        data=df_filtro.to_csv(index=False).encode("utf-8"),
+        file_name="IW58_Dashboard.csv",
+        mime="text/csv"
+    )
+
+# ================= EXCEL =================
+with c2:
     buffer = BytesIO()
-    df.to_excel(buffer, index=False)
+    df_filtro.to_excel(buffer, index=False)
     buffer.seek(0)
-    return buffer
 
-e1, e2 = st.columns(2)
-
-with e1:
     st.download_button(
-        "⬇️ Baixar CSV",
-        df_filtro.to_csv(index=False).encode("utf-8"),
-        "IW58_Dashboard.csv",
-        "text/csv"
+        label="⬇️ Baixar Excel",
+        data=buffer,
+        file_name="IW58_Dashboard.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
-
-with e2:
-    st.download_button(
-        "⬇️ Baixar Excel",
-        gerar_excel(df_filtro),
-        "IW58_Dashboard.xlsx",
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
-
-# ======================================================
-# TABELA
-# ======================================================
-st.subheader("📋 Base de Dados")
-st.dataframe(df_filtro, use_container_width=True, height=300)
