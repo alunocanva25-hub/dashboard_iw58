@@ -75,7 +75,7 @@ COL_REGIONAL = achar_coluna(df, ["REGIONAL"])
 COL_DATA = achar_coluna(df, ["DATA"])
 
 if not COL_ESTADO or not COL_RESULTADO or not COL_TIPO or not COL_DATA:
-    st.error("Colunas obrigatórias não encontradas.")
+    st.error("Colunas obrigatórias não encontradas na base.")
     st.stop()
 
 # ======================================================
@@ -149,7 +149,7 @@ c1.plotly_chart(donut_resultado(df_am, f"AM – {estado}"), use_container_width=
 c2.plotly_chart(donut_resultado(df_as, f"AS – {estado}"), use_container_width=True)
 
 # ======================================================
-# FUNÇÃO – MOTIVOS (BARRAS)
+# FUNÇÃO – MOTIVOS
 # ======================================================
 def grafico_motivos(df_base, titulo):
     if not COL_MOTIVO:
@@ -265,30 +265,34 @@ def evolucao_mensal(df_base):
 st.plotly_chart(evolucao_mensal(df_filtro), use_container_width=True)
 
 # ======================================================
-# BASE FINAL
+# EXPORTAÇÃO
 # ======================================================
 st.subheader("📤 Exportar Dados")
 
-c1, c2 = st.columns(2)
+e1, e2 = st.columns(2)
 
-# ================= CSV =================
-with c1:
+with e1:
     st.download_button(
-        label="⬇️ Baixar CSV",
-        data=df_filtro.to_csv(index=False).encode("utf-8"),
-        file_name="IW58_Dashboard.csv",
-        mime="text/csv"
+        "⬇️ Baixar CSV",
+        df_filtro.to_csv(index=False).encode("utf-8"),
+        "IW58_Dashboard.csv",
+        "text/csv"
     )
 
-# ================= EXCEL =================
-with c2:
+with e2:
     buffer = BytesIO()
     df_filtro.to_excel(buffer, index=False)
     buffer.seek(0)
 
     st.download_button(
-        label="⬇️ Baixar Excel",
-        data=buffer,
-        file_name="IW58_Dashboard.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        "⬇️ Baixar Excel",
+        buffer,
+        "IW58_Dashboard.xlsx",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
+
+# ======================================================
+# BASE FINAL
+# ======================================================
+st.subheader("📋 Base de Dados")
+st.dataframe(df_filtro, use_container_width=True, height=300)
