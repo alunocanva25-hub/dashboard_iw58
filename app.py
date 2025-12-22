@@ -57,7 +57,7 @@ def achar_coluna(df, palavras):
 # ======================================================
 @st.cache_data
 def carregar_base():
-    url = "https://drive.google.com/uc?id=1WzXQVd7nwMKv02I2DLPNuMh4wK7bKQVO"
+    url = "https://drive.google.com/uc?id=1JRI_yTUKrj94ocfMLa1Llh9jRU-z4FOd"
     df = pd.read_csv(url, sep=None, engine="python", encoding="utf-8-sig")
     df.columns = df.columns.str.upper().str.strip()
     return df
