@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+from io import BytesIO
 
 # ======================================================
 # CONFIGURAÇÃO DA PÁGINA
@@ -266,12 +267,11 @@ st.plotly_chart(evolucao_mensal(df_filtro), use_container_width=True)
 # ======================================================
 # BASE FINAL
 # ======================================================
-st.subheader("📋 Base de Dados")
-st.dataframe(df_filtro, use_container_width=True, height=300)
 st.subheader("📤 Exportar Dados")
 
 c1, c2 = st.columns(2)
 
+# ================= CSV =================
 with c1:
     st.download_button(
         label="⬇️ Baixar CSV",
@@ -280,10 +280,15 @@ with c1:
         mime="text/csv"
     )
 
+# ================= EXCEL =================
 with c2:
+    buffer = BytesIO()
+    df_filtro.to_excel(buffer, index=False)
+    buffer.seek(0)
+
     st.download_button(
         label="⬇️ Baixar Excel",
-        data=df_filtro.to_excel(index=False, engine="xlsxwriter"),
+        data=buffer,
         file_name="IW58_Dashboard.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
