@@ -282,13 +282,15 @@ with c1:
 
 # ================= EXCEL =================
 with c2:
-    buffer = BytesIO()
-    df_filtro.to_excel(buffer, index=False)
-    buffer.seek(0)
+   from io import BytesIO
 
-    st.download_button(
-        label="⬇️ Baixar Excel",
-        data=buffer,
-        file_name="IW58_Dashboard.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
+buffer = BytesIO()
+df_filtro.to_excel(buffer, index=False)
+buffer.seek(0)
+
+st.download_button(
+    label="⬇️ Baixar Excel",
+    data=buffer,
+    file_name="IW58_Dashboard.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+)
