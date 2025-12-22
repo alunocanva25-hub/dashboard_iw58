@@ -280,17 +280,3 @@ with c1:
         mime="text/csv"
     )
 
-# ================= EXCEL =================
-with c2:
-   from io import BytesIO
-
-buffer = BytesIO()
-df_filtro.to_excel(buffer, index=False)
-buffer.seek(0)
-
-st.download_button(
-    label="⬇️ Baixar Excel",
-    data=buffer,
-    file_name="IW58_Dashboard.xlsx",
-    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-)
