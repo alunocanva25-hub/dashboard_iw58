@@ -40,7 +40,7 @@ if not st.session_state["logado"]:
 # ======================================================
 # TÍTULO
 # ======================================================
-st.title("📊 Dashboard IW58 – AM x AS")
+st.title("📊 Dashboard Notas – AM x AS")
 
 # ======================================================
 # FUNÇÃO PARA IDENTIFICAR COLUNAS
