@@ -13,7 +13,12 @@ st.set_page_config(
 st.title("📊 Dashboard IW58 – AM x AS")
 
 # ======================================================
-# FUNÇÃO PARA IDENTIFICAR COLUNAS
+# LINK DO CSV NO GOOGLE DRIVE (LINK DIRETO)
+# ======================================================
+URL_BASE = "https://drive.google.com/uc?id=1WzXQVd7nwMKv02I2DLPNuMh4wK7bKQVO"
+
+# ======================================================
+# FUNÇÃO PARA IDENTIFICAR COLUNAS AUTOMATICAMENTE
 # ======================================================
 def achar_coluna(df, palavras):
     for coluna in df.columns:
@@ -23,17 +28,16 @@ def achar_coluna(df, palavras):
     return None
 
 # ======================================================
-# CARREGAMENTO DA BASE
+# CARREGAMENTO DA BASE (COMPATÍVEL COM STREAMLIT CLOUD)
 # ======================================================
 @st.cache_data
-URL_BASE = "https://drive.google.com/uc?id=1WzXQVd7nwMKv02I2DLPNuMh4wK7bKQVO"
-
-df = pd.read_csv(
-    URL_BASE,
-    sep=None,
-    engine="python",
-    encoding="utf-8-sig"
-)
+def carregar_base():
+    df = pd.read_csv(
+        URL_BASE,
+        sep=None,
+        engine="python",
+        encoding="utf-8-sig"
+    )
     df.columns = df.columns.str.upper().str.strip()
     return df
 
@@ -50,15 +54,13 @@ COL_REGIONAL = achar_coluna(df, ["REGIONAL"])
 COL_DATA = achar_coluna(df, ["DATA"])
 
 if not COL_ESTADO or not COL_RESULTADO or not COL_TIPO or not COL_DATA:
-    st.error("Colunas obrigatórias não encontradas na base.")
+    st.error("❌ Colunas obrigatórias não encontradas na base.")
     st.stop()
 
 # ======================================================
 # TRATAMENTO DE DATA
 # ======================================================
 df[COL_DATA] = pd.to_datetime(df[COL_DATA], errors="coerce")
-df["MES"] = df[COL_DATA].dt.month
-df["ANO"] = df[COL_DATA].dt.year
 df["MES_ANO"] = df[COL_DATA].dt.strftime("%m/%Y")
 
 # ======================================================
@@ -118,17 +120,20 @@ def grafico_resultado(df_base, titulo):
         "Quantidade": [proc, improc]
     })
 
-    return px.pie(
+    fig = px.pie(
         dados,
         names="Resultado",
         values="Quantidade",
-        hole=0.55,
+        hole=0.6,
         title=titulo,
         template="plotly_dark"
     )
 
+    fig.update_traces(textinfo="percent+value")
+    return fig
+
 # ======================================================
-# LINHA 2 — DONUTS
+# DONUTS
 # ======================================================
 c4, c5 = st.columns(2)
 
@@ -159,8 +164,8 @@ def grafico_motivos(df_base, titulo):
         .sort_values("Quantidade")
     )
 
-    dados["Percentual"] = dados["Quantidade"] / dados["Quantidade"].sum() * 100
-    dados["Label"] = dados["Quantidade"].astype(str) + " (" + dados["Percentual"].round(1).astype(str) + "%)"
+    dados["Percentual"] = (dados["Quantidade"] / dados["Quantidade"].sum() * 100).round(1)
+    dados["Label"] = dados["Quantidade"].astype(str) + " (" + dados["Percentual"].astype(str) + "%)"
 
     fig = px.bar(
         dados,
@@ -174,11 +179,10 @@ def grafico_motivos(df_base, titulo):
 
     fig.update_traces(textposition="outside")
     fig.update_layout(showlegend=False)
-
     return fig
 
 # ======================================================
-# LINHA 3 — MOTIVOS
+# MOTIVOS
 # ======================================================
 c6, c7 = st.columns(2)
 
@@ -193,60 +197,7 @@ with c7:
         st.plotly_chart(fig, use_container_width=True)
 
 # ======================================================
-# FUNÇÃO – IMPROCEDENTE POR REGIONAL
-# ======================================================
-def grafico_improcedente_regional(df_base, titulo):
-    if not COL_REGIONAL:
-        return None
-
-    base = df_base[df_base[COL_RESULTADO].str.contains("IMPROCEDENTE", na=False)]
-
-    dados = (
-        base
-        .groupby(COL_REGIONAL)
-        .size()
-        .reset_index(name="Quantidade")
-        .sort_values("Quantidade")
-    )
-
-    fig = px.bar(
-        dados,
-        x="Quantidade",
-        y=COL_REGIONAL,
-        orientation="h",
-        text="Quantidade",
-        title=titulo,
-        template="plotly_dark"
-    )
-
-    fig.update_traces(textposition="outside")
-    fig.update_layout(showlegend=False)
-
-    return fig
-
-# ======================================================
-# LINHA 4 — IMPROCEDENTE POR REGIONAL
-# ======================================================
-c8, c9 = st.columns(2)
-
-with c8:
-    fig = grafico_improcedente_regional(
-        df_am,
-        f"Improcedentes por Regional – AM ({estado_selecionado})"
-    )
-    if fig:
-        st.plotly_chart(fig, use_container_width=True)
-
-with c9:
-    fig = grafico_improcedente_regional(
-        df_as,
-        f"Improcedentes por Regional – AS ({estado_selecionado})"
-    )
-    if fig:
-        st.plotly_chart(fig, use_container_width=True)
-
-# ======================================================
-# FUNÇÃO – AM x AS POR MÊS (NOVO)
+# FUNÇÃO – AM x AS POR MÊS (VALOR + %)
 # ======================================================
 def grafico_am_as_mensal(df_base):
     dados = (
@@ -256,7 +207,6 @@ def grafico_am_as_mensal(df_base):
         .reset_index(name="Quantidade")
     )
 
-    # Total por mês (para cálculo de percentual)
     total_mes = (
         dados
         .groupby("MES_ANO")["Quantidade"]
@@ -266,14 +216,7 @@ def grafico_am_as_mensal(df_base):
 
     dados = dados.merge(total_mes, on="MES_ANO")
     dados["Percentual"] = (dados["Quantidade"] / dados["TOTAL_MES"] * 100).round(1)
-
-    # Texto que aparece no gráfico
-    dados["Label"] = (
-        dados["Quantidade"].astype(str)
-        + " ("
-        + dados["Percentual"].astype(str)
-        + "%)"
-    )
+    dados["Label"] = dados["Quantidade"].astype(str) + " (" + dados["Percentual"].astype(str) + "%)"
 
     fig = px.bar(
         dados,
@@ -295,8 +238,9 @@ def grafico_am_as_mensal(df_base):
     )
 
     return fig
+
 # ======================================================
-# LINHA 5 — GRÁFICO MENSAL
+# EVOLUÇÃO MENSAL
 # ======================================================
 st.subheader("📅 Evolução Mensal")
 
