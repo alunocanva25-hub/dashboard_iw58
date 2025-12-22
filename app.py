@@ -268,3 +268,22 @@ st.plotly_chart(evolucao_mensal(df_filtro), use_container_width=True)
 # ======================================================
 st.subheader("📋 Base de Dados")
 st.dataframe(df_filtro, use_container_width=True, height=300)
+st.subheader("📤 Exportar Dados")
+
+c1, c2 = st.columns(2)
+
+with c1:
+    st.download_button(
+        label="⬇️ Baixar CSV",
+        data=df_filtro.to_csv(index=False).encode("utf-8"),
+        file_name="IW58_Dashboard.csv",
+        mime="text/csv"
+    )
+
+with c2:
+    st.download_button(
+        label="⬇️ Baixar Excel",
+        data=df_filtro.to_excel(index=False, engine="xlsxwriter"),
+        file_name="IW58_Dashboard.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
