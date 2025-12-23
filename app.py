@@ -1,13 +1,12 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from io import BytesIO
 
 # ======================================================
 # CONFIGURAÇÃO DA PÁGINA
 # ======================================================
 st.set_page_config(
-    page_title="Dashboard IW58",
+    page_title="Dashboard Notas – AM x AS",
     layout="wide"
 )
 
@@ -16,7 +15,6 @@ st.set_page_config(
 # ======================================================
 def tela_login():
     st.markdown("## 🔐 Acesso Restrito")
-
     usuario = st.text_input("Usuário")
     senha = st.text_input("Senha", type="password")
 
@@ -43,7 +41,7 @@ if not st.session_state["logado"]:
 st.title("📊 Dashboard Notas – AM x AS")
 
 # ======================================================
-# FUNÇÃO PARA IDENTIFICAR COLUNAS
+# FUNÇÕES UTILITÁRIAS
 # ======================================================
 def achar_coluna(df, palavras):
     for coluna in df.columns:
@@ -52,17 +50,59 @@ def achar_coluna(df, palavras):
                 return coluna
     return None
 
+def validar_estrutura(df):
+    obrigatorias = {
+        "ESTADO": ["ESTADO", "LOCALIDADE", "UF"],
+        "RESULTADO": ["RESULTADO"],
+        "TIPO": ["TIPO"],
+        "DATA": ["DATA"]
+    }
+
+    problemas = []
+
+    for nome, alternativas in obrigatorias.items():
+        if not achar_coluna(df, alternativas):
+            problemas.append(f"❌ Coluna obrigatória não encontrada: {nome}")
+
+    if problemas:
+        st.error("Problemas na estrutura da base:")
+        for p in problemas:
+            st.write(p)
+        st.stop()
+
 # ======================================================
-# CARREGAMENTO DA BASE (GOOGLE DRIVE)
+# CACHE CORRETO (COM TTL + DEPENDÊNCIA DO LINK)
 # ======================================================
-@st.cache_data
-def carregar_base():
-    url = "https://drive.google.com/uc?id=1NteTwRrAnnpOCVZH6mlassTzeWKsOdYY"
+@st.cache_data(ttl=600, show_spinner="🔄 Carregando base de dados...")
+def carregar_base(url):
     df = pd.read_csv(url, sep=None, engine="python", encoding="utf-8-sig")
     df.columns = df.columns.str.upper().str.strip()
     return df
 
-df = carregar_base()
+# ======================================================
+# BOTÃO ATUALIZAR BASE (FORÇA LIMPEZA DO CACHE)
+# ======================================================
+col_refresh, col_info = st.columns([1, 5])
+
+with col_refresh:
+    if st.button("🔄 Atualizar base"):
+        st.cache_data.clear()
+        st.success("Cache limpo. Base será recarregada.")
+        st.rerun()
+
+with col_info:
+    st.caption("Use este botão quando o arquivo no Google Drive for atualizado.")
+
+# ======================================================
+# CARREGAMENTO DA BASE
+# ======================================================
+URL_BASE = "https://drive.google.com/uc?id=1NteTwRrAnnpOCVZH6mlassTzeWKsOdYY"
+df = carregar_base(URL_BASE)
+
+# ======================================================
+# VALIDAÇÃO DA ESTRUTURA DA BASE
+# ======================================================
+validar_estrutura(df)
 
 # ======================================================
 # IDENTIFICAÇÃO DAS COLUNAS
@@ -74,24 +114,22 @@ COL_MOTIVO = achar_coluna(df, ["MOTIVO"])
 COL_REGIONAL = achar_coluna(df, ["REGIONAL"])
 COL_DATA = achar_coluna(df, ["DATA"])
 
-if not COL_ESTADO or not COL_RESULTADO or not COL_TIPO or not COL_DATA:
-    st.error("Colunas obrigatórias não encontradas.")
-    st.stop()
-
 # ======================================================
 # TRATAMENTO DE DATA
 # ======================================================
 df[COL_DATA] = pd.to_datetime(df[COL_DATA], errors="coerce")
+df = df.dropna(subset=[COL_DATA])
+
 df["MES"] = df[COL_DATA].dt.month
 df["ANO"] = df[COL_DATA].dt.year
 df["MES_ANO"] = df[COL_DATA].dt.strftime("%b/%Y")
 
 # ======================================================
-# FILTRO POR ESTADO (BOTÕES)
+# FILTRO POR ESTADO
 # ======================================================
 st.subheader("📍 Localidade")
 
-estados = sorted(df[COL_ESTADO].dropna().unique().tolist())
+estados = sorted(df[COL_ESTADO].dropna().astype(str).unique().tolist())
 estados = ["TOTAL"] + estados
 
 if "estado_sel" not in st.session_state:
@@ -103,7 +141,6 @@ for i, est in enumerate(estados):
         st.session_state.estado_sel = est
 
 estado = st.session_state.estado_sel
-
 df_filtro = df if estado == "TOTAL" else df[df[COL_ESTADO] == estado]
 
 # ======================================================
@@ -121,7 +158,7 @@ k2.metric("Total AM", len(df_am))
 k3.metric("Total AS", len(df_as))
 
 # ======================================================
-# FUNÇÃO – DONUT RESULTADO
+# DONUT RESULTADO
 # ======================================================
 def donut_resultado(df_base, titulo):
     proc = df_base[COL_RESULTADO].str.contains("PROCEDENTE", na=False).sum()
@@ -149,7 +186,7 @@ c1.plotly_chart(donut_resultado(df_am, f"AM – {estado}"), use_container_width=
 c2.plotly_chart(donut_resultado(df_as, f"AS – {estado}"), use_container_width=True)
 
 # ======================================================
-# FUNÇÃO – MOTIVOS (BARRAS)
+# MOTIVOS (BARRAS)
 # ======================================================
 def grafico_motivos(df_base, titulo):
     if not COL_MOTIVO:
@@ -177,7 +214,6 @@ def grafico_motivos(df_base, titulo):
 
     fig.update_traces(textposition="outside")
     fig.update_layout(showlegend=False)
-
     return fig
 
 # ======================================================
@@ -188,7 +224,7 @@ c3.plotly_chart(grafico_motivos(df_am, f"Motivos AM – {estado}"), use_containe
 c4.plotly_chart(grafico_motivos(df_as, f"Motivos AS – {estado}"), use_container_width=True)
 
 # ======================================================
-# FUNÇÃO – IMPROCEDENTE POR REGIONAL
+# IMPROCEDENTE POR REGIONAL
 # ======================================================
 def improcedente_regional(df_base, titulo):
     if not COL_REGIONAL:
@@ -215,7 +251,6 @@ def improcedente_regional(df_base, titulo):
 
     fig.update_traces(textposition="outside")
     fig.update_layout(showlegend=False)
-
     return fig
 
 # ======================================================
@@ -226,7 +261,7 @@ c5.plotly_chart(improcedente_regional(df_am, f"Improcedente Regional AM – {est
 c6.plotly_chart(improcedente_regional(df_as, f"Improcedente Regional AS – {estado}"), use_container_width=True)
 
 # ======================================================
-# FUNÇÃO – EVOLUÇÃO MENSAL
+# EVOLUÇÃO MENSAL
 # ======================================================
 def evolucao_mensal(df_base):
     dados = (
@@ -256,26 +291,18 @@ def evolucao_mensal(df_base):
         xaxis_title="Mês",
         yaxis_title="Quantidade"
     )
-
     return fig
 
-# ======================================================
-# LINHA 4 — EVOLUÇÃO MENSAL
-# ======================================================
 st.plotly_chart(evolucao_mensal(df_filtro), use_container_width=True)
 
 # ======================================================
-# BASE FINAL
+# EXPORTAÇÃO
 # ======================================================
 st.subheader("📤 Exportar Dados")
 
-c1, c2 = st.columns(2)
-
-# ================= CSV =================
-with c1:
-    st.download_button(
-        label="⬇️ Baixar CSV",
-        data=df_filtro.to_csv(index=False).encode("utf-8"),
-        file_name="IW58_Dashboard.csv",
-        mime="text/csv"
-    )
+st.download_button(
+    label="⬇️ Baixar CSV",
+    data=df_filtro.to_csv(index=False).encode("utf-8"),
+    file_name="IW58_Dashboard.csv",
+    mime="text/csv"
+)
