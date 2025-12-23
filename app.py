@@ -2,22 +2,19 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import requests
+import re
 from io import BytesIO
 
 # ======================================================
 # CONFIGURAÇÃO DA PÁGINA
 # ======================================================
-st.set_page_config(
-    page_title="Dashboard Notas – AM x AS",
-    layout="wide"
-)
+st.set_page_config(page_title="Dashboard Notas – AM x AS", layout="wide")
 
 # ======================================================
 # LOGIN
 # ======================================================
 def tela_login():
     st.markdown("## 🔐 Acesso Restrito")
-
     usuario = st.text_input("Usuário")
     senha = st.text_input("Senha", type="password")
 
@@ -58,9 +55,8 @@ def validar_estrutura(df):
         "ESTADO/UF": ["ESTADO", "LOCALIDADE", "UF"],
         "RESULTADO": ["RESULTADO"],
         "TIPO": ["TIPO"],
-        "DATA": ["DATA"]
+        "DATA": ["DATA"],
     }
-
     erros = []
     for nome, alternativas in obrigatorias.items():
         if not achar_coluna(df, alternativas):
@@ -72,25 +68,50 @@ def validar_estrutura(df):
             st.write(e)
         st.stop()
 
+def _extrair_sheet_id(url: str) -> str | None:
+    m = re.search(r"/spreadsheets/d/([a-zA-Z0-9-_]+)", url)
+    return m.group(1) if m else None
+
+def _extrair_drive_id(url: str) -> str | None:
+    m = re.search(r"[?&]id=([a-zA-Z0-9-_]+)", url)
+    if m:
+        return m.group(1)
+    m = re.search(r"/file/d/([a-zA-Z0-9-_]+)", url)
+    return m.group(1) if m else None
+
+def _normalizar_para_csv(url: str) -> str:
+    sheet_id = _extrair_sheet_id(url)
+    if sheet_id:
+        return f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid=0"
+    drive_id = _extrair_drive_id(url)
+    if drive_id:
+        return f"https://drive.google.com/uc?id={drive_id}"
+    return url
+
 # ======================================================
-# CACHE ROBUSTO + GOOGLE DRIVE (resolve UnicodeDecodeError)
+# CACHE ROBUSTO + LEITURA (resolve UnicodeDecodeError e links Drive/Sheets)
 # ======================================================
 @st.cache_data(ttl=600, show_spinner="🔄 Carregando base de dados...")
-def carregar_base(url: str) -> pd.DataFrame:
-    r = requests.get(url, timeout=30)
+def carregar_base(url_original: str) -> tuple[pd.DataFrame, dict]:
+    url = _normalizar_para_csv(url_original)
+
+    r = requests.get(url, timeout=45)
     r.raise_for_status()
 
     raw = r.content
-    head = raw[:300].lstrip().lower()
+    info = {
+        "url_usada": url,
+        "status": r.status_code,
+        "content_type": r.headers.get("Content-Type", ""),
+        "bytes": len(raw),
+    }
 
-    # Se o Drive retornar HTML (permissão/link errado)
+    head = raw[:400].lstrip().lower()
+
     if head.startswith(b"<!doctype html") or b"<html" in head:
         raise RuntimeError(
-            "O link do Google Drive não está retornando o CSV (está retornando HTML).\n"
-            "Verifique se o arquivo está compartilhado como:\n"
-            "'Qualquer pessoa com o link → Visualizador'\n"
-            "e se o link está no formato:\n"
-            "https://drive.google.com/uc?id=SEU_ID"
+            "A URL não retornou CSV (retornou HTML). "
+            "Verifique permissões do Drive/Sheets (Qualquer pessoa com link – Visualizador)."
         )
 
     encodings = ["utf-8-sig", "utf-8", "cp1252", "latin1"]
@@ -98,11 +119,10 @@ def carregar_base(url: str) -> pd.DataFrame:
         try:
             df = pd.read_csv(BytesIO(raw), sep=None, engine="python", encoding=enc)
             df.columns = df.columns.str.upper().str.strip()
-            return df
+            return df, info
         except UnicodeDecodeError:
             continue
 
-    # fallback final (não quebra o app)
     df = pd.read_csv(
         BytesIO(raw),
         sep=None,
@@ -111,11 +131,8 @@ def carregar_base(url: str) -> pd.DataFrame:
         encoding_errors="replace"
     )
     df.columns = df.columns.str.upper().str.strip()
-
-    st.warning(
-        "⚠️ O arquivo não está em UTF-8. Caracteres inválidos foram substituídos."
-    )
-    return df
+    info["encoding_fallback"] = "utf-8 replace"
+    return df, info
 
 # ======================================================
 # BOTÃO ATUALIZAR BASE
@@ -125,13 +142,23 @@ if st.button("🔄 Atualizar base"):
     st.rerun()
 
 # ======================================================
-# CARREGAMENTO DA BASE
+# FONTE (pode ser Drive ou Google Sheets)
 # ======================================================
-URL_BASE = "https://drive.google.com/uc?id=1xg5D9tAqhy0DlX7uu6X8e2BsQku1KOs7"
-df = carregar_base(URL_BASE)
+URL_BASE = "https://drive.google.com/uc?id=1NteTwRrAnnpOCVZH6mlassTzeWKsOdYY"
+df, meta = carregar_base(URL_BASE)
 
 # ======================================================
-# VALIDAÇÃO DA BASE
+# DIAGNÓSTICO (para confirmar linhas/bytes/URL real)
+# ======================================================
+with st.expander("🧪 Diagnóstico da Base"):
+    st.write("URL usada:", meta["url_usada"])
+    st.write("Content-Type:", meta["content_type"])
+    st.write("Tamanho (bytes):", meta["bytes"])
+    st.write("Linhas lidas:", len(df))
+    st.write("Colunas:", df.columns.tolist())
+
+# ======================================================
+# VALIDAÇÃO
 # ======================================================
 validar_estrutura(df)
 
@@ -146,26 +173,15 @@ COL_REGIONAL = achar_coluna(df, ["REGIONAL"])
 COL_DATA = achar_coluna(df, ["DATA"])
 
 # ======================================================
-# TRATAMENTO DE DATA (ATUALIZAÇÃO: NÃO derruba linhas!)
+# TRATAMENTO DE DATA (não derruba linhas)
 # ======================================================
 df[COL_DATA] = pd.to_datetime(df[COL_DATA], errors="coerce", dayfirst=True)
-
-# cria MES/ANO/MES_ANO SEM excluir registros sem data
 df["MES"] = df[COL_DATA].dt.month
 df["ANO"] = df[COL_DATA].dt.year
 df["MES_ANO"] = df[COL_DATA].dt.strftime("%b/%Y")
 
 # ======================================================
-# DEBUG (para você confirmar as 16.470 notas)
-# ======================================================
-with st.expander("🧪 Diagnóstico da Base (clique para ver)"):
-    st.write("Linhas (bruto):", len(df))
-    st.write("Linhas com DATA válida:", df[COL_DATA].notna().sum())
-    st.write("Linhas com DATA inválida/vazia:", df[COL_DATA].isna().sum())
-    st.write("Colunas:", df.columns.tolist())
-
-# ======================================================
-# FILTRO POR ESTADO (BOTÕES)
+# FILTRO POR ESTADO (grid para muitos estados)
 # ======================================================
 st.subheader("📍 Localidade")
 
@@ -175,7 +191,6 @@ estados = ["TOTAL"] + estados
 if "estado_sel" not in st.session_state:
     st.session_state.estado_sel = "TOTAL"
 
-# Evita quebrar layout se tiver muitos estados: limita por linha
 per_row = 8
 for start in range(0, len(estados), per_row):
     row = st.columns(min(per_row, len(estados) - start))
@@ -201,16 +216,13 @@ k2.metric("Total AM", len(df_am))
 k3.metric("Total AS", len(df_as))
 
 # ======================================================
-# FUNÇÃO – DONUT RESULTADO
+# DONUT RESULTADO
 # ======================================================
 def donut_resultado(df_base, titulo):
     proc = df_base[COL_RESULTADO].astype(str).str.contains("PROCEDENTE", na=False).sum()
     improc = df_base[COL_RESULTADO].astype(str).str.contains("IMPROCEDENTE", na=False).sum()
 
-    dados = pd.DataFrame({
-        "Resultado": ["Procedente", "Improcedente"],
-        "Quantidade": [proc, improc]
-    })
+    dados = pd.DataFrame({"Resultado": ["Procedente", "Improcedente"], "Quantidade": [proc, improc]})
 
     return px.pie(
         dados,
@@ -221,15 +233,12 @@ def donut_resultado(df_base, titulo):
         template="plotly_dark"
     )
 
-# ======================================================
-# LINHA 1 — DONUTS
-# ======================================================
 c1, c2 = st.columns(2)
 c1.plotly_chart(donut_resultado(df_am, f"AM – {estado}"), use_container_width=True)
 c2.plotly_chart(donut_resultado(df_as, f"AS – {estado}"), use_container_width=True)
 
 # ======================================================
-# FUNÇÃO – MOTIVOS (BARRAS)
+# MOTIVOS (BARRAS)
 # ======================================================
 def grafico_motivos(df_base, titulo):
     if not COL_MOTIVO:
@@ -241,7 +250,6 @@ def grafico_motivos(df_base, titulo):
         .reset_index(name="Quantidade")
         .sort_values("Quantidade")
     )
-
     if dados.empty:
         return None
 
@@ -257,15 +265,10 @@ def grafico_motivos(df_base, titulo):
         title=titulo,
         template="plotly_dark"
     )
-
     fig.update_traces(textposition="outside")
     fig.update_layout(showlegend=False)
-
     return fig
 
-# ======================================================
-# LINHA 2 — MOTIVOS
-# ======================================================
 c3, c4 = st.columns(2)
 fig_m_am = grafico_motivos(df_am, f"Motivos AM – {estado}")
 fig_m_as = grafico_motivos(df_as, f"Motivos AS – {estado}")
@@ -281,14 +284,13 @@ else:
     c4.info("Sem dados de motivos (AS).")
 
 # ======================================================
-# FUNÇÃO – IMPROCEDENTE POR REGIONAL
+# IMPROCEDENTE POR REGIONAL
 # ======================================================
 def improcedente_regional(df_base, titulo):
     if not COL_REGIONAL:
         return None
 
     base = df_base[df_base[COL_RESULTADO].astype(str).str.contains("IMPROCEDENTE", na=False)]
-
     if base.empty:
         return None
 
@@ -308,15 +310,10 @@ def improcedente_regional(df_base, titulo):
         title=titulo,
         template="plotly_dark"
     )
-
     fig.update_traces(textposition="outside")
     fig.update_layout(showlegend=False)
-
     return fig
 
-# ======================================================
-# LINHA 3 — REGIONAL
-# ======================================================
 c5, c6 = st.columns(2)
 fig_r_am = improcedente_regional(df_am, f"Improcedente Regional AM – {estado}")
 fig_r_as = improcedente_regional(df_as, f"Improcedente Regional AS – {estado}")
@@ -324,15 +321,15 @@ fig_r_as = improcedente_regional(df_as, f"Improcedente Regional AS – {estado}"
 if fig_r_am is not None:
     c5.plotly_chart(fig_r_am, use_container_width=True)
 else:
-    c5.info("Sem dados de improcedência (AM) por regional.")
+    c5.info("Sem improcedência (AM) por regional.")
 
 if fig_r_as is not None:
     c6.plotly_chart(fig_r_as, use_container_width=True)
 else:
-    c6.info("Sem dados de improcedência (AS) por regional.")
+    c6.info("Sem improcedência (AS) por regional.")
 
 # ======================================================
-# FUNÇÃO – EVOLUÇÃO MENSAL (ATUALIZAÇÃO: só usa linhas com data válida)
+# EVOLUÇÃO MENSAL (só com DATA válida)
 # ======================================================
 def evolucao_mensal(df_base):
     base = df_base.dropna(subset=[COL_DATA]).copy()
@@ -347,7 +344,6 @@ def evolucao_mensal(df_base):
         .reset_index(name="Quantidade")
         .sort_values("MES_ANO")
     )
-
     if dados.empty:
         return None
 
@@ -365,30 +361,21 @@ def evolucao_mensal(df_base):
         title="📅 AM x AS por Mês",
         template="plotly_dark"
     )
-
     fig.update_traces(textposition="outside")
-    fig.update_layout(
-        xaxis_title="Mês",
-        yaxis_title="Quantidade"
-    )
-
+    fig.update_layout(xaxis_title="Mês", yaxis_title="Quantidade")
     return fig
 
-# ======================================================
-# LINHA 4 — EVOLUÇÃO MENSAL
-# ======================================================
 st.subheader("📅 Evolução Mensal")
 fig_mensal = evolucao_mensal(df_filtro)
 if fig_mensal is not None:
     st.plotly_chart(fig_mensal, use_container_width=True)
 else:
-    st.info("Sem dados suficientes para exibir evolução mensal (DATA vazia ou inválida).")
+    st.info("Sem dados para evolução mensal (DATA vazia/ inválida).")
 
 # ======================================================
-# BASE FINAL
+# EXPORTAÇÃO
 # ======================================================
 st.subheader("📤 Exportar Dados")
-
 st.download_button(
     label="⬇️ Baixar CSV",
     data=df_filtro.to_csv(index=False).encode("utf-8"),
