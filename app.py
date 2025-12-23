@@ -265,8 +265,12 @@ def donut_resultado(df_base, titulo):
         color="Resultado",
         color_discrete_map={"Procedente": COR_PROC, "Improcedente": COR_IMP}
     )
-    fig.update_layout(height=300, margin=dict(l=240, r=20, t=45, b=10), showlegend=False)
-
+      fig.update_layout(
+        title=titulo,
+        height=260,
+        margin=dict(l=240, r=10, t=45, b=10),
+        legend_title_text=""
+    )
     fig.update_traces(textinfo="percent+value")
     return fig
 
