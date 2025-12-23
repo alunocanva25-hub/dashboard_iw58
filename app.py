@@ -377,7 +377,7 @@ with colB:
 # ======================================================
 # CARREGAMENTO
 # ======================================================
-URL_BASE = "https://drive.google.com/uc?id=1xg5D9tAqhy0DlX7uu6X8e2BsQku1KOs7"
+URL_BASE = "https://drive.google.com/uc?id=12FcGFxQSC5M4I_vvJGSAG3jNQRG5G1w0"
 df = carregar_base(URL_BASE)
 validar_estrutura(df)
 
