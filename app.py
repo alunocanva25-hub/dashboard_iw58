@@ -406,7 +406,7 @@ with row1[2]:
     st.markdown("</div>", unsafe_allow_html=True)
 
 # Linha 2 (3 cards)
-row2 = st.columns([1, 1.6, 0.9], gap="large")
+row2 = st.columns([1, 1.4, 0.9], gap="large")
 
 with row2[0]:
     st.markdown('<div class="card"><div class="card-title">IMPROCEDÊNCIAS POR REGIONAL – NOTA AM</div>', unsafe_allow_html=True)
