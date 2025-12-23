@@ -268,7 +268,7 @@ def donut_resultado(df_base, titulo):
       fig.update_layout(
         title=titulo,
         height=260,
-        margin=dict(l=240, r=10, t=45, b=10),
+        margin=dict(l=10, r=10, t=45, b=10),
         legend_title_text=""
     )
     fig.update_traces(textinfo="percent+value")
