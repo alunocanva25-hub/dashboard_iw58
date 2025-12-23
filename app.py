@@ -144,7 +144,7 @@ if st.button("🔄 Atualizar base"):
 # ======================================================
 # FONTE (pode ser Drive ou Google Sheets)
 # ======================================================
-URL_BASE = "https://drive.google.com/uc?id=1NteTwRrAnnpOCVZH6mlassTzeWKsOdYY"
+URL_BASE = "https://drive.google.com/uc?id=1xg5D9tAqhy0DlX7uu6X8e2BsQku1KOs7"
 df, meta = carregar_base(URL_BASE)
 
 # ======================================================
