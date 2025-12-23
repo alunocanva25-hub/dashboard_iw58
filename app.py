@@ -265,7 +265,7 @@ def donut_resultado(df_base, titulo):
         color="Resultado",
         color_discrete_map={"Procedente": COR_PROC, "Improcedente": COR_IMP}
     )
-      fig.update_layout(
+    fig.update_layout(
         title=titulo,
         height=260,
         margin=dict(l=10, r=10, t=45, b=10),
