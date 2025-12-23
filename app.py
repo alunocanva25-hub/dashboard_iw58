@@ -14,7 +14,7 @@ from reportlab.lib import colors
 st.set_page_config(page_title="Dashboard Notas – AM x AS", layout="wide")
 
 # ======================================================
-# CSS (visual do print + organização)
+# CSS (visual do dashboard + organização)
 # ======================================================
 st.markdown("""
 <style>
@@ -28,6 +28,7 @@ st.markdown("""
   padding: 14px 16px;
   box-shadow: 0 10px 18px rgba(0,0,0,0.18);
   margin-bottom: 14px;
+  text-align: center; 
 }
 .card-title{
   font-weight: 950;
