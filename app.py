@@ -15,6 +15,7 @@ st.set_page_config(page_title="Dashboard Notas – AM x AS", layout="wide")
 
 # ======================================================
 # CSS (visual do dashboard + organização)
+# + ALTERAÇÃO: estilo do segmented (aba ativa) e lista por localidade
 # ======================================================
 st.markdown("""
 <style>
@@ -28,7 +29,7 @@ st.markdown("""
   padding: 14px 16px;
   box-shadow: 0 10px 18px rgba(0,0,0,0.18);
   margin-bottom: 14px;
-  text-align: center; 
+  text-align: center;
 }
 .card-title{
   font-weight: 950;
@@ -100,6 +101,43 @@ div.stButton > button{
 div.stButton > button:hover{
   background: rgba(255,255,255,0.65);
   border-color: rgba(10,40,70,0.35);
+}
+
+/* Segmented control (aba ativa com cor diferente) */
+div[data-baseweb="segmented-control"]{
+  background: rgba(255,255,255,0.35);
+  border: 2px solid rgba(10,40,70,0.22);
+  border-radius: 14px;
+  padding: 6px;
+}
+div[data-baseweb="segmented-control"] span{
+  font-weight: 900 !important;
+  color: #0b2b45 !important;
+}
+div[data-baseweb="segmented-control"] div[aria-checked="true"]{
+  background: #0b2b45 !important;
+  border-radius: 10px !important;
+}
+div[data-baseweb="segmented-control"] div[aria-checked="true"] span{
+  color: #ffffff !important;
+}
+
+/* Lista (notas por localidade) */
+.loc-row{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:6px 8px;
+  border-radius:10px;
+  margin-bottom:6px;
+  border:1px solid rgba(10,40,70,0.22);
+  background: rgba(255,255,255,0.35);
+  color:#0b2b45;
+  font-weight: 900;
+}
+.loc-row.active{
+  background:#0b2b45;
+  color:#ffffff;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -176,11 +214,11 @@ def validar_estrutura(df):
         st.error("Estrutura da base incompatível. Faltando: " + ", ".join(faltando))
         st.stop()
 
-def _extrair_sheet_id(url: str) -> str | None:
+def _extrair_sheet_id(url: str):
     m = re.search(r"/spreadsheets/d/([a-zA-Z0-9-_]+)", url)
     return m.group(1) if m else None
 
-def _extrair_drive_id(url: str) -> str | None:
+def _extrair_drive_id(url: str):
     m = re.search(r"[?&]id=([a-zA-Z0-9-_]+)", url)
     if m: return m.group(1)
     m = re.search(r"/file/d/([a-zA-Z0-9-_]+)", url)
@@ -269,7 +307,7 @@ def acumulado_mensal_fig_e_tabela(df_base, col_data):
     total_mes = dados.groupby("MES_NUM")["QTD"].transform("sum")
     dados["PCT"] = (dados["QTD"] / total_mes * 100).round(0)
 
-    # ✅ % em PROCEDENTE e IMPROCEDENTE
+    # % em PROCEDENTE e IMPROCEDENTE
     dados["LABEL"] = ""
     mask_proc = dados["_CLASSE_"] == "PROCEDENTE"
     mask_imp  = dados["_CLASSE_"] == "IMPROCEDENTE"
@@ -299,17 +337,30 @@ def acumulado_mensal_fig_e_tabela(df_base, col_data):
 
     return fig, tab
 
-    # Tabela final
-    tab = dados.pivot_table(index=["MES_NUM", "MÊS"], columns="_CLASSE_", values="QTD", fill_value=0).reset_index()
-    for c in ["IMPROCEDENTE", "PROCEDENTE", "OUTROS"]:
-        if c not in tab.columns:
-            tab[c] = 0
-    tab["TOTAL"] = tab["IMPROCEDENTE"] + tab["PROCEDENTE"] + tab["OUTROS"]
-    tab = tab.sort_values("MES_NUM").drop(columns=["MES_NUM"])
-    tab = tab.rename(columns={"MÊS": "MÊS", "IMPROCEDENTE": "IMPROCEDENTE", "PROCEDENTE": "PROCEDENTE", "TOTAL": "TOTAL"})
-    tab = tab[["MÊS", "IMPROCEDENTE", "PROCEDENTE", "TOTAL"]]
+def resumo_por_localidade_html(df_base, col_local, selecionado, top_n=12):
+    if col_local is None or df_base.empty:
+        return ""
 
-    return fig, tab
+    s = df_base[col_local].dropna().astype(str).str.upper()
+    vc = s.value_counts().reset_index()
+    vc.columns = ["LOCAL", "QTD"]
+
+    if len(vc) > top_n:
+        outros = int(vc.iloc[top_n:]["QTD"].sum())
+        vc = vc.iloc[:top_n].copy()
+        vc.loc[len(vc)] = ["OUTROS", outros]
+
+    linhas = []
+    sel = str(selecionado).upper()
+    for _, r in vc.iterrows():
+        loc = r["LOCAL"]
+        qtd = int(r["QTD"])
+        active = (sel != "TOTAL" and loc == sel)
+        cls = "loc-row active" if active else "loc-row"
+        qtd_fmt = f"{qtd:,}".replace(",", ".")
+        linhas.append(f'<div class="{cls}"><span>{loc}</span><span>{qtd_fmt}</span></div>')
+
+    return "\n".join(linhas)
 
 # ======================================================
 # BOTÃO ATUALIZAR BASE
@@ -347,7 +398,7 @@ df_ano = df if ano_ref is None else df[df[COL_DATA].dt.year == ano_ref].copy()
 ano_txt = str(ano_ref) if ano_ref else "—"
 
 # ======================================================
-# "ABAS" UF
+# "ABAS" UF  (ALTERAÇÃO: segmented_control com destaque do selecionado)
 # ======================================================
 ufs = sorted(df[COL_ESTADO].dropna().astype(str).str.upper().unique().tolist())
 ufs = ["TOTAL"] + ufs
@@ -355,14 +406,13 @@ ufs = ["TOTAL"] + ufs
 if "uf_sel" not in st.session_state:
     st.session_state.uf_sel = "TOTAL"
 
-per_row = 10
-for start in range(0, len(ufs), per_row):
-    row = st.columns(min(per_row, len(ufs) - start))
-    for i, uf in enumerate(ufs[start:start + per_row]):
-        if row[i].button(uf):
-            st.session_state.uf_sel = uf
+uf_sel = st.segmented_control(
+    label="",
+    options=ufs,
+    default=st.session_state.uf_sel
+)
+st.session_state.uf_sel = uf_sel
 
-uf_sel = st.session_state.uf_sel
 df_filtro = df_ano if uf_sel == "TOTAL" else df_ano[df_ano[COL_ESTADO].astype(str).str.upper() == uf_sel]
 
 df_am = df_filtro[df_filtro["_TIPO_"].str.contains("AM", na=False)]
@@ -375,7 +425,7 @@ df_as = df_filtro[df_filtro["_TIPO_"].str.contains("AS", na=False)]
 # ======================================================
 row1 = st.columns([1.05, 1.15, 1.15], gap="large")
 
-# Card KPI (mais simples)
+# Card KPI + "Notas por localidade" (ALTERAÇÃO: lista abaixo do total)
 with row1[0]:
     total = len(df_filtro)
     am = len(df_am)
@@ -399,6 +449,12 @@ with row1[0]:
               <div class="lbl">AS</div>
               <div class="val">{as_fmt}</div>
             </div>
+          </div>
+          <div style="margin-top:14px; text-align:left;">
+            <div style="font-weight:950;color:#0b2b45;margin-bottom:8px;text-transform:uppercase;">
+              Notas por localidade
+            </div>
+            {resumo_por_localidade_html(df_ano, COL_ESTADO, uf_sel, top_n=12)}
           </div>
         </div>
         """,
@@ -424,7 +480,7 @@ with row1[2]:
     st.markdown("</div>", unsafe_allow_html=True)
 
 # Linha 2 (3 cards)
-row2 = st.columns([1, 1.4, 1.4], gap="large")
+row2 = st.columns([1, 1.3, 1.3], gap="large")
 
 with row2[0]:
     st.markdown('<div class="card"><div class="card-title">IMPROCEDÊNCIAS POR REGIONAL – NOTA AM</div>', unsafe_allow_html=True)
@@ -468,7 +524,7 @@ else:
 st.markdown("</div>", unsafe_allow_html=True)
 
 # ======================================================
-# TABELA NO FINAL 
+# TABELA NO FINAL
 # ======================================================
 st.markdown('<div class="card"><div class="card-title">TABELA — VALORES MENSAIS</div>', unsafe_allow_html=True)
 if tabela_mensal is not None:
@@ -492,20 +548,11 @@ def gerar_pdf(df_tabela, ano_ref, uf_sel):
     styles = getSampleStyleSheet()
     elementos = []
 
-    # Título
-    elementos.append(Paragraph(
-        f"<b>DASHBOARD NOTAS AM x AS – {ano_ref}</b>",
-        styles["Title"]
-    ))
+    elementos.append(Paragraph(f"<b>DASHBOARD NOTAS AM x AS – {ano_ref}</b>", styles["Title"]))
+    elementos.append(Spacer(1, 12))
+    elementos.append(Paragraph(f"<b>UF selecionada:</b> {uf_sel}", styles["Normal"]))
     elementos.append(Spacer(1, 12))
 
-    elementos.append(Paragraph(
-        f"<b>UF selecionada:</b> {uf_sel}",
-        styles["Normal"]
-    ))
-    elementos.append(Spacer(1, 12))
-
-    # KPIs
     total = len(df_filtro)
     am = len(df_am)
     az = len(df_as)
@@ -517,7 +564,6 @@ def gerar_pdf(df_tabela, ano_ref, uf_sel):
     ))
     elementos.append(Spacer(1, 14))
 
-    # Tabela
     if df_tabela is not None and not df_tabela.empty:
         data = [df_tabela.columns.tolist()] + df_tabela.values.tolist()
 
@@ -540,7 +586,7 @@ def gerar_pdf(df_tabela, ano_ref, uf_sel):
     return buffer
 
 # ======================================================
-# EXPORTAÇÃO
+# EXPORTAÇÃO (PDF)
 # ======================================================
 pdf_buffer = gerar_pdf(
     df_tabela=tabela_mensal,
@@ -554,4 +600,3 @@ st.download_button(
     file_name=f"IW58_Dashboard_{ano_txt}_{uf_sel}.pdf",
     mime="application/pdf"
 )
-
