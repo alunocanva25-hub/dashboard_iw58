@@ -280,7 +280,7 @@ c5.plotly_chart(improcedente_regional(df_am, f"Improcedente Regional AM – {est
 c6.plotly_chart(improcedente_regional(df_as, f"Improcedente Regional AS – {estado}"), use_container_width=True)
 
 # ======================================================
-# EVOLUÇÃO MENSAL
+# FUNÇÃO – EVOLUÇÃO MENSAL
 # ======================================================
 def evolucao_mensal(df_base):
     dados = (
@@ -289,6 +289,10 @@ def evolucao_mensal(df_base):
         .reset_index(name="Quantidade")
         .sort_values("MES_ANO")
     )
+
+    if dados.empty:
+        st.info("Sem dados suficientes para exibir a evolução mensal.")
+        return None
 
     total_mes = dados.groupby("MES_ANO")["Quantidade"].transform("sum")
     dados["Percentual"] = (dados["Quantidade"] / total_mes * 100).round(1)
@@ -304,6 +308,19 @@ def evolucao_mensal(df_base):
         title="📅 AM x AS por Mês",
         template="plotly_dark"
     )
+
     fig.update_traces(textposition="outside")
-    fig.update_layout(xaxis_title="Mês", yaxis_title="Quantidade")
-    re
+    fig.update_layout(
+        xaxis_title="Mês",
+        yaxis_title="Quantidade"
+    )
+    return fig
+
+# ======================================================
+# LINHA 4 — EVOLUÇÃO MENSAL
+# ======================================================
+st.subheader("📅 Evolução Mensal")
+fig_mensal = evolucao_mensal(df_filtro)
+if fig_mensal is not None:
+    st.plotly_chart(fig_mensal, use_container_width=True)
+
