@@ -259,7 +259,6 @@ def acumulado_mensal_fig_e_tabela(df_base, col_data):
     base["MES_NUM"] = base[col_data].dt.month
     base["MÊS"] = base["MES_NUM"].map(MESES_PT)
 
-    # Classe (procedente / improcedente / outros)
     base["_CLASSE_"] = "OUTROS"
     base.loc[base["_RES_"].str.contains("PROCED", na=False), "_CLASSE_"] = "PROCEDENTE"
     base.loc[base["_RES_"].str.contains("IMPROCED", na=False), "_CLASSE_"] = "IMPROCEDENTE"
@@ -267,11 +266,15 @@ def acumulado_mensal_fig_e_tabela(df_base, col_data):
     dados = base.groupby(["MES_NUM", "MÊS", "_CLASSE_"]).size().reset_index(name="QTD")
     dados = dados.sort_values("MES_NUM")
 
-    # Label % somente em PROCEDENTE
     total_mes = dados.groupby("MES_NUM")["QTD"].transform("sum")
     dados["PCT"] = (dados["QTD"] / total_mes * 100).round(0)
+
+    # ✅ % em PROCEDENTE e IMPROCEDENTE
     dados["LABEL"] = ""
-    dados.loc[dados["_CLASSE_"] == "PROCEDENTE", "LABEL"] = dados.loc[dados["_CLASSE_"] == "PROCEDENTE", "PCT"].astype(int).astype(str) + "%"
+    mask_proc = dados["_CLASSE_"] == "PROCEDENTE"
+    mask_imp  = dados["_CLASSE_"] == "IMPROCEDENTE"
+    dados.loc[mask_proc, "LABEL"] = dados.loc[mask_proc, "PCT"].astype(int).astype(str) + "%"
+    dados.loc[mask_imp,  "LABEL"] = dados.loc[mask_imp,  "PCT"].astype(int).astype(str) + "%"
 
     fig = px.bar(
         dados,
@@ -285,6 +288,16 @@ def acumulado_mensal_fig_e_tabela(df_base, col_data):
     fig.update_traces(textposition="outside", cliponaxis=False)
     fig.update_xaxes(title_text="")
     fig.update_yaxes(title_text="")
+
+    tab = dados.pivot_table(index=["MES_NUM", "MÊS"], columns="_CLASSE_", values="QTD", fill_value=0).reset_index()
+    for c in ["IMPROCEDENTE", "PROCEDENTE", "OUTROS"]:
+        if c not in tab.columns:
+            tab[c] = 0
+    tab["TOTAL"] = tab["IMPROCEDENTE"] + tab["PROCEDENTE"] + tab["OUTROS"]
+    tab = tab.sort_values("MES_NUM").drop(columns=["MES_NUM"])
+    tab = tab[["MÊS", "IMPROCEDENTE", "PROCEDENTE", "TOTAL"]]
+
+    return fig, tab
 
     # Tabela final
     tab = dados.pivot_table(index=["MES_NUM", "MÊS"], columns="_CLASSE_", values="QTD", fill_value=0).reset_index()
@@ -455,7 +468,7 @@ else:
 st.markdown("</div>", unsafe_allow_html=True)
 
 # ======================================================
-# TABELA NO FINAL (como você pediu)
+# TABELA NO FINAL 
 # ======================================================
 st.markdown('<div class="card"><div class="card-title">TABELA — VALORES MENSAIS</div>', unsafe_allow_html=True)
 if tabela_mensal is not None:
