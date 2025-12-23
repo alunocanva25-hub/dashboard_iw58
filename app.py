@@ -424,7 +424,7 @@ df_as = df_filtro[df_filtro["_TIPO_"].str.contains("AS", na=False)]
 #   Linha 1: KPI + Donut AM + Donut AS
 #   Linha 2: Regional AM + Motivos AM + Motivos AS
 # ======================================================
-row1 = st.columns([1.05, 1.15, 1.15], gap="large")
+row1 = st.columns([1.09, 1.15, 1.15], gap="large")
 
 # Card KPI + "Notas por localidade" (ALTERAÇÃO: lista abaixo do total)
 with row1[0]:
