@@ -1,21 +1,20 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
 import requests, re
 from io import BytesIO
 
 # ======================================================
-# CONFIGURAÇÃO DA PÁGINA
+# CONFIG
 # ======================================================
 st.set_page_config(page_title="Dashboard Notas – AM x AS", layout="wide")
 
 # ======================================================
-# CSS (VISUAL do print)
+# CSS (visual do print + organização)
 # ======================================================
 st.markdown("""
 <style>
-.stApp { background: #6fa6d6; } /* azul do fundo */
+.stApp { background: #6fa6d6; }
 .block-container{ padding-top: 0.6rem; max-width: 1500px; }
 
 .card{
@@ -24,31 +23,37 @@ st.markdown("""
   border-radius: 18px;
   padding: 14px 16px;
   box-shadow: 0 10px 18px rgba(0,0,0,0.18);
+  margin-bottom: 14px;
 }
 .card-title{
-  font-weight: 900;
+  font-weight: 950;
   color:#0b2b45;
-  font-size: 14px;
+  font-size: 13px;
   text-transform: uppercase;
   margin-bottom: 10px;
+  letter-spacing: .3px;
+}
+
+.kpi-row{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-end;
+  gap: 10px;
 }
 .kpi-big{
-  font-size: 44px;
+  font-size: 42px;
   font-weight: 950;
   color:#9b0d0d;
   line-height: 1.0;
 }
-.kpi-sub{
-  display:flex;
-  gap:22px;
-  justify-content:center;
-  margin-top: 6px;
+.kpi-mini{
+  text-align:center;
 }
-.kpi-sub .lbl{
-  font-weight:900; color:#0b2b45; font-size:14px; text-align:center;
+.kpi-mini .lbl{
+  font-weight:900; color:#0b2b45; font-size:12px; text-transform:uppercase;
 }
-.kpi-sub .val{
-  font-weight:950; color:#9b0d0d; font-size:28px; text-align:center;
+.kpi-mini .val{
+  font-weight:950; color:#9b0d0d; font-size:26px; line-height: 1.0;
 }
 
 .topbar{
@@ -95,14 +100,14 @@ div.stButton > button:hover{
 """, unsafe_allow_html=True)
 
 # ======================================================
-# LOGIN (mantido)
+# LOGIN
 # ======================================================
 def tela_login():
     st.markdown("## 🔐 Acesso Restrito")
     usuario = st.text_input("Usuário")
     senha = st.text_input("Senha", type="password")
     if st.button("Entrar"):
-        if (usuario == st.secrets["auth"]["usuario"] and senha == st.secrets["auth"]["senha"]):
+        if usuario == st.secrets["auth"]["usuario"] and senha == st.secrets["auth"]["senha"]:
             st.session_state["logado"] = True
             st.rerun()
         else:
@@ -115,8 +120,38 @@ if not st.session_state["logado"]:
     st.stop()
 
 # ======================================================
-# FUNÇÕES BASE
+# TOPO
 # ======================================================
+st.markdown("""
+<div class="topbar">
+  <div class="brand">
+    <div class="brand-badge">3C</div>
+    <div class="brand-text">
+      <div class="t1">DASHBOARD NOTAS – AM x AS</div>
+      <div class="t2">Visão gerencial no padrão do painel de referência</div>
+    </div>
+  </div>
+  <div class="right-note">
+    FUNÇÃO MEDIÇÃO<br>
+    <small>NOTAS AM – ANÁLISE DE MEDIÇÃO<br>NOTAS AS – AUDITORIA DE SERVIÇO</small>
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
+# ======================================================
+# FUNÇÕES
+# ======================================================
+MESES_PT = {
+    1: "JANEIRO", 2: "FEVEREIRO", 3: "MARÇO", 4: "ABRIL",
+    5: "MAIO", 6: "JUNHO", 7: "JULHO", 8: "AGOSTO",
+    9: "SETEMBRO", 10: "OUTUBRO", 11: "NOVEMBRO", 12: "DEZEMBRO"
+}
+MESES_ORDEM = [MESES_PT[i] for i in range(1, 13)]
+
+COR_PROC = "#2e7d32"
+COR_IMP  = "#c62828"
+COR_OUT  = "#546e7a"
+
 def achar_coluna(df, palavras):
     for col in df.columns:
         for p in palavras:
@@ -131,10 +166,7 @@ def validar_estrutura(df):
         "TIPO": ["TIPO"],
         "DATA": ["DATA"],
     }
-    faltando = []
-    for nome, alts in obrig.items():
-        if not achar_coluna(df, alts):
-            faltando.append(nome)
+    faltando = [nome for nome, alts in obrig.items() if not achar_coluna(df, alts)]
     if faltando:
         st.error("Estrutura da base incompatível. Faltando: " + ", ".join(faltando))
         st.stop()
@@ -178,24 +210,88 @@ def carregar_base(url_original: str) -> pd.DataFrame:
     df.columns = df.columns.str.upper().str.strip()
     return df
 
-# ======================================================
-# TOPO (como no print)
-# ======================================================
-st.markdown("""
-<div class="topbar">
-  <div class="brand">
-    <div class="brand-badge">3C</div>
-    <div class="brand-text">
-      <div class="t1">DASHBOARD NOTAS – AM x AS</div>
-      <div class="t2">Visual no padrão do painel de referência</div>
-    </div>
-  </div>
-  <div class="right-note">
-    FUNÇÃO MEDIÇÃO<br>
-    <small>NOTAS AM – ANÁLISE DE MEDIÇÃO<br>NOTAS AS – AUDITORIA DE SERVIÇO</small>
-  </div>
-</div>
-""", unsafe_allow_html=True)
+def donut_resultado(df_base, titulo):
+    proc = df_base["_RES_"].str.contains("PROCED", na=False).sum()
+    imp  = df_base["_RES_"].str.contains("IMPROCED", na=False).sum()
+
+    dados = pd.DataFrame({"Resultado": ["Procedente", "Improcedente"], "QTD": [proc, imp]})
+    fig = px.pie(
+        dados, names="Resultado", values="QTD", hole=0.62,
+        template="plotly_white",
+        color="Resultado",
+        color_discrete_map={"Procedente": COR_PROC, "Improcedente": COR_IMP}
+    )
+    fig.update_layout(
+        title=titulo,
+        height=260,
+        margin=dict(l=10, r=10, t=45, b=10),
+        legend_title_text=""
+    )
+    fig.update_traces(textinfo="percent+value")
+    return fig
+
+def barh_contagem(df_base, col_dim, titulo):
+    if col_dim is None or df_base.empty:
+        return None
+    dados = df_base.groupby(col_dim).size().reset_index(name="QTD").sort_values("QTD")
+    if dados.empty:
+        return None
+    fig = px.bar(
+        dados, x="QTD", y=col_dim, orientation="h", text="QTD",
+        title=titulo, template="plotly_white"
+    )
+    fig.update_layout(height=300, margin=dict(l=10, r=10, t=45, b=10), showlegend=False)
+    fig.update_traces(textposition="outside", cliponaxis=False)
+    fig.update_xaxes(title_text="")
+    fig.update_yaxes(title_text="")
+    return fig
+
+def acumulado_mensal_fig_e_tabela(df_base, col_data):
+    base = df_base.dropna(subset=[col_data]).copy()
+    if base.empty:
+        return None, None
+
+    base["MES_NUM"] = base[col_data].dt.month
+    base["MÊS"] = base["MES_NUM"].map(MESES_PT)
+
+    # Classe (procedente / improcedente / outros)
+    base["_CLASSE_"] = "OUTROS"
+    base.loc[base["_RES_"].str.contains("PROCED", na=False), "_CLASSE_"] = "PROCEDENTE"
+    base.loc[base["_RES_"].str.contains("IMPROCED", na=False), "_CLASSE_"] = "IMPROCEDENTE"
+
+    dados = base.groupby(["MES_NUM", "MÊS", "_CLASSE_"]).size().reset_index(name="QTD")
+    dados = dados.sort_values("MES_NUM")
+
+    # Label % somente em PROCEDENTE
+    total_mes = dados.groupby("MES_NUM")["QTD"].transform("sum")
+    dados["PCT"] = (dados["QTD"] / total_mes * 100).round(0)
+    dados["LABEL"] = ""
+    dados.loc[dados["_CLASSE_"] == "PROCEDENTE", "LABEL"] = dados.loc[dados["_CLASSE_"] == "PROCEDENTE", "PCT"].astype(int).astype(str) + "%"
+
+    fig = px.bar(
+        dados,
+        x="MÊS", y="QTD", color="_CLASSE_", barmode="stack",
+        text="LABEL",
+        category_orders={"MÊS": MESES_ORDEM, "_CLASSE_": ["PROCEDENTE", "IMPROCEDENTE", "OUTROS"]},
+        template="plotly_white",
+        color_discrete_map={"PROCEDENTE": COR_PROC, "IMPROCEDENTE": COR_IMP, "OUTROS": COR_OUT}
+    )
+    fig.update_layout(height=320, margin=dict(l=10, r=10, t=40, b=10), legend_title_text="")
+    fig.update_traces(textposition="outside", cliponaxis=False)
+    fig.update_xaxes(title_text="")
+    fig.update_yaxes(title_text="")
+
+    # Tabela final
+    tab = dados.pivot_table(index=["MES_NUM", "MÊS"], columns="_CLASSE_", values="QTD", fill_value=0).reset_index()
+    for c in ["IMPROCEDENTE", "PROCEDENTE", "OUTROS"]:
+        if c not in tab.columns:
+            tab[c] = 0
+    tab["TOTAL"] = tab["IMPROCEDENTE"] + tab["PROCEDENTE"] + tab["OUTROS"]
+    tab = tab.sort_values("MES_NUM").drop(columns=["MES_NUM"])
+    tab = tab.rename(columns={"MÊS": "MÊS", "IMPROCEDENTE": "IMPROCEDENTE", "PROCEDENTE": "PROCEDENTE", "TOTAL": "TOTAL"})
+    tab = tab[["MÊS", "IMPROCEDENTE", "PROCEDENTE", "TOTAL"]]
+
+    return fig, tab
 
 # ======================================================
 # BOTÃO ATUALIZAR BASE
@@ -222,25 +318,19 @@ COL_MOTIVO    = achar_coluna(df, ["MOTIVO"])
 COL_REGIONAL  = achar_coluna(df, ["REGIONAL"])
 COL_DATA      = achar_coluna(df, ["DATA"])
 
-# Data (não derruba linhas)
+# Preparação
 df[COL_DATA] = pd.to_datetime(df[COL_DATA], errors="coerce", dayfirst=True)
-
-# Normalizações
 df["_TIPO_"] = df[COL_TIPO].astype(str).str.upper().str.strip()
 df["_RES_"]  = df[COL_RESULTADO].astype(str).str.upper().str.strip()
 
-df["_CLASSE_"] = "OUTROS"
-df.loc[df["_RES_"].str.contains("PROCED", na=False), "_CLASSE_"] = "PROCEDENTE"
-df.loc[df["_RES_"].str.contains("IMPROCED", na=False), "_CLASSE_"] = "IMPROCEDENTE"
-
-# Ano ref (pega o ano mais recente com data)
+# Ano referência (último ano encontrado)
 ano_ref = int(df[COL_DATA].dt.year.dropna().max()) if df[COL_DATA].notna().any() else None
 df_ano = df if ano_ref is None else df[df[COL_DATA].dt.year == ano_ref].copy()
+ano_txt = str(ano_ref) if ano_ref else "—"
 
 # ======================================================
-# "ABAS" (UF) – como no print
+# "ABAS" UF
 # ======================================================
-st.markdown("### ")
 ufs = sorted(df[COL_ESTADO].dropna().astype(str).str.upper().unique().tolist())
 ufs = ["TOTAL"] + ufs
 
@@ -257,117 +347,21 @@ for start in range(0, len(ufs), per_row):
 uf_sel = st.session_state.uf_sel
 df_filtro = df_ano if uf_sel == "TOTAL" else df_ano[df_ano[COL_ESTADO].astype(str).str.upper() == uf_sel]
 
-# Separação AM/AS
 df_am = df_filtro[df_filtro["_TIPO_"].str.contains("AM", na=False)]
 df_as = df_filtro[df_filtro["_TIPO_"].str.contains("AS", na=False)]
 
 # ======================================================
-# FUNÇÕES DE GRÁFICOS NO ESTILO DO PRINT
+# 6 BLOCOS (CARDS)
+#   Linha 1: KPI + Donut AM + Donut AS
+#   Linha 2: Regional AM + Motivos AM + Motivos AS
 # ======================================================
-COR_PROC = "#2e7d32"   # verde
-COR_IMP  = "#c62828"   # vermelho
-COR_OUT  = "#546e7a"   # cinza
+row1 = st.columns([1.05, 1.15, 1.15], gap="large")
 
-def fig_acumulado_anual(df_base):
-    # barras horizontais empilhadas AM/AS por classe
-    if df_base.empty:
-        return None
-
-    base = df_base.copy()
-    base["_TIPO2_"] = base["_TIPO_"].str.extract(r"(AM|AS)", expand=False).fillna(base["_TIPO_"])
-    dados = base.groupby(["_TIPO2_", "_CLASSE_"]).size().reset_index(name="QTD")
-
-    ordem_tipo = [t for t in ["AM", "AS"] if t in dados["_TIPO2_"].unique()]
-    if not ordem_tipo:
-        ordem_tipo = sorted(dados["_TIPO2_"].unique().tolist())
-
-    fig = px.bar(
-        dados, x="QTD", y="_TIPO2_", color="_CLASSE_", orientation="h",
-        barmode="stack", text="QTD",
-        category_orders={"_TIPO2_": ordem_tipo, "_CLASSE_": ["PROCEDENTE","IMPROCEDENTE","OUTROS"]},
-        template="plotly_white",
-        color_discrete_map={"PROCEDENTE": COR_PROC, "IMPROCEDENTE": COR_IMP, "OUTROS": COR_OUT}
-    )
-    fig.update_layout(height=240, margin=dict(l=10,r=10,t=10,b=10), legend_title_text="")
-    fig.update_traces(textposition="outside", cliponaxis=False)
-    fig.update_xaxes(title_text="")
-    fig.update_yaxes(title_text="")
-    return fig
-
-def fig_acumulado_mensal(df_base):
-    # barras verticais empilhadas (procedente/improcedente) com % do procedente em cima + tabela
-    base = df_base.dropna(subset=[COL_DATA]).copy()
-    if base.empty:
-        return None, None
-
-    base["MES"] = base[COL_DATA].dt.month
-    base["MES_LABEL"] = base[COL_DATA].dt.strftime("%B").str.upper()  # JANEIRO...
-    # total do mês por classe
-    dados = base.groupby(["MES","MES_LABEL","_CLASSE_"]).size().reset_index(name="QTD")
-    dados = dados.sort_values("MES")
-
-    # percent procedente por mês
-    tot_mes = dados.groupby("MES")["QTD"].transform("sum")
-    dados["PCT"] = (dados["QTD"] / tot_mes * 100).round(0)
-    dados["LABEL"] = ""
-    dados.loc[dados["_CLASSE_"]=="PROCEDENTE","LABEL"] = dados.loc[dados["_CLASSE_"]=="PROCEDENTE","PCT"].astype(int).astype(str) + "%"
-
-    ordem_mes = dados[["MES","MES_LABEL"]].drop_duplicates().sort_values("MES")["MES_LABEL"].tolist()
-
-    fig = px.bar(
-        dados, x="MES_LABEL", y="QTD", color="_CLASSE_",
-        barmode="stack", text="LABEL",
-        category_orders={"MES_LABEL": ordem_mes, "_CLASSE_": ["PROCEDENTE","IMPROCEDENTE","OUTROS"]},
-        template="plotly_white",
-        color_discrete_map={"PROCEDENTE": COR_PROC, "IMPROCEDENTE": COR_IMP, "OUTROS": COR_OUT}
-    )
-    fig.update_layout(height=280, margin=dict(l=10,r=10,t=10,b=10), legend_title_text="")
-    fig.update_traces(textposition="outside", cliponaxis=False)
-    fig.update_xaxes(title_text="")
-    fig.update_yaxes(title_text="")
-
-    # tabela (procedente, improcedente, total)
-    tab = dados.pivot_table(index=["MES","MES_LABEL"], columns="_CLASSE_", values="QTD", fill_value=0).reset_index()
-    tab["TOTAL"] = tab.select_dtypes("number").sum(axis=1)
-    tab = tab.sort_values("MES").drop(columns=["MES"]).rename(columns={"MES_LABEL":"MÊS"})
-    # garante colunas
-    for c in ["IMPROCEDENTE","PROCEDENTE","OUTROS"]:
-        if c not in tab.columns:
-            tab[c] = 0
-    # ordem semelhante ao print
-    tab = tab[["MÊS","IMPROCEDENTE","PROCEDENTE","TOTAL"]]
-
-    return fig, tab
-
-def fig_barh(df_base, col_dim, titulo):
-    if col_dim is None or df_base.empty:
-        return None
-    dados = df_base.groupby(col_dim).size().reset_index(name="QTD").sort_values("QTD")
-    if dados.empty:
-        return None
-    fig = px.bar(
-        dados, x="QTD", y=col_dim, orientation="h", text="QTD",
-        template="plotly_white", title=titulo
-    )
-    fig.update_layout(height=290, margin=dict(l=10,r=10,t=40,b=10), showlegend=False)
-    fig.update_traces(textposition="outside", cliponaxis=False)
-    fig.update_xaxes(title_text="")
-    fig.update_yaxes(title_text="")
-    return fig
-
-# ... [imports e código anterior permanecem IGUAIS] ...
-
-# ======================================================
-# LAYOUT PRINCIPAL (igual ao print)
-# ======================================================
-top = st.columns([1.05, 1.15, 2.8], gap="large")
-
-# KPI esquerdo
-with top[0]:
+# Card KPI (mais simples)
+with row1[0]:
     total = len(df_filtro)
     am = len(df_am)
     az = len(df_as)
-    ano_txt = str(ano_ref) if ano_ref else "—"
 
     total_fmt = f"{total:,}".replace(",", ".")
     am_fmt    = f"{am:,}".replace(",", ".")
@@ -376,17 +370,14 @@ with top[0]:
     st.markdown(
         f"""
         <div class="card">
-          <div class="card-title">
-            ACUMULADO DE NOTAS<br>
-            AM / AS<br>{ano_txt}
-          </div>
-          <div style="text-align:center" class="kpi-big">{total_fmt}</div>
-          <div class="kpi-sub">
-            <div>
+          <div class="card-title">ACUMULADO DE NOTAS AM / AS • {ano_txt}</div>
+          <div class="kpi-row">
+            <div class="kpi-big">{total_fmt}</div>
+            <div class="kpi-mini">
               <div class="lbl">AM</div>
               <div class="val">{am_fmt}</div>
             </div>
-            <div>
+            <div class="kpi-mini">
               <div class="lbl">AS</div>
               <div class="val">{as_fmt}</div>
             </div>
@@ -396,69 +387,81 @@ with top[0]:
         unsafe_allow_html=True
     )
 
-# ... [RESTO DO SCRIPT CONTINUA IGUAL AO QUE TE MANDEI]
-
-
-# Acumulado anual
-with top[1]:
-    st.markdown('<div class="card"><div class="card-title">ACUMULADO ANUAL</div>', unsafe_allow_html=True)
-    fig = fig_acumulado_anual(df_filtro)
-    if fig is not None:
-        st.plotly_chart(fig, use_container_width=True)
-        # percentuais gerais
-        proc = (df_filtro["_CLASSE_"]=="PROCEDENTE").sum()
-        imp  = (df_filtro["_CLASSE_"]=="IMPROCEDENTE").sum()
-        tot  = max(1, proc+imp)
-        st.caption(f"Procedente: **{proc}** ({proc/tot:.0%})  •  Improcedente: **{imp}** ({imp/tot:.0%})")
+# Donut AM
+with row1[1]:
+    st.markdown('<div class="card"><div class="card-title">ACUMULADO ANUAL – AM</div>', unsafe_allow_html=True)
+    if df_am.empty:
+        st.info("Sem dados AM.")
     else:
-        st.info("Sem dados.")
+        st.plotly_chart(donut_resultado(df_am, " "), use_container_width=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
-# Acumulado mensal + tabela
-with top[2]:
-    st.markdown('<div class="card"><div class="card-title">ACUMULADO MENSAL DE NOTAS AM - AS</div>', unsafe_allow_html=True)
-    fig_m, tab = fig_acumulado_mensal(df_filtro)
-    if fig_m is not None:
-        st.plotly_chart(fig_m, use_container_width=True)
-        st.dataframe(tab, use_container_width=True, hide_index=True)
+# Donut AS
+with row1[2]:
+    st.markdown('<div class="card"><div class="card-title">ACUMULADO ANUAL – AS</div>', unsafe_allow_html=True)
+    if df_as.empty:
+        st.info("Sem dados AS.")
     else:
-        st.info("Sem dados mensais (DATA vazia/ inválida).")
+        st.plotly_chart(donut_resultado(df_as, " "), use_container_width=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
-# Linha de baixo: 3 gráficos
-bottom = st.columns(3, gap="large")
+# Linha 2 (3 cards)
+row2 = st.columns(3, gap="large")
 
-with bottom[0]:
-    st.markdown('<div class="card"><div class="card-title">IMPROCEDÊNCIAS POR REGIONAL - NOTA AM</div>', unsafe_allow_html=True)
-    base_imp_am = df_am[df_am["_CLASSE_"]=="IMPROCEDENTE"]
-    fig = fig_barh(base_imp_am, COL_REGIONAL, " ")
+with row2[0]:
+    st.markdown('<div class="card"><div class="card-title">IMPROCEDÊNCIAS POR REGIONAL – NOTA AM</div>', unsafe_allow_html=True)
+    base_imp_am = df_am[df_am["_RES_"].str.contains("IMPROCED", na=False)]
+    fig = barh_contagem(base_imp_am, COL_REGIONAL, " ")
     if fig is not None:
         st.plotly_chart(fig, use_container_width=True)
     else:
         st.info("Sem improcedências (AM) por regional.")
     st.markdown("</div>", unsafe_allow_html=True)
 
-with bottom[1]:
-    st.markdown('<div class="card"><div class="card-title">MOTIVOS DE IMPROCEDÊNCIAS - NOTA AM</div>', unsafe_allow_html=True)
-    base_imp_am = df_am[df_am["_CLASSE_"]=="IMPROCEDENTE"]
-    fig = fig_barh(base_imp_am, COL_MOTIVO, " ")
+with row2[1]:
+    st.markdown('<div class="card"><div class="card-title">MOTIVOS DE IMPROCEDÊNCIAS – NOTA AM</div>', unsafe_allow_html=True)
+    base_imp_am = df_am[df_am["_RES_"].str.contains("IMPROCED", na=False)]
+    fig = barh_contagem(base_imp_am, COL_MOTIVO, " ")
     if fig is not None:
         st.plotly_chart(fig, use_container_width=True)
     else:
         st.info("Sem motivos (AM).")
     st.markdown("</div>", unsafe_allow_html=True)
 
-with bottom[2]:
-    st.markdown('<div class="card"><div class="card-title">MOTIVOS DE IMPROCEDÊNCIAS - NOTAS AS</div>', unsafe_allow_html=True)
-    base_imp_as = df_as[df_as["_CLASSE_"]=="IMPROCEDENTE"]
-    fig = fig_barh(base_imp_as, COL_MOTIVO, " ")
+with row2[2]:
+    st.markdown('<div class="card"><div class="card-title">MOTIVOS DE IMPROCEDÊNCIAS – NOTAS AS</div>', unsafe_allow_html=True)
+    base_imp_as = df_as[df_as["_RES_"].str.contains("IMPROCED", na=False)]
+    fig = barh_contagem(base_imp_as, COL_MOTIVO, " ")
     if fig is not None:
         st.plotly_chart(fig, use_container_width=True)
     else:
         st.info("Sem motivos (AS).")
     st.markdown("</div>", unsafe_allow_html=True)
 
-# Exportação
+# ======================================================
+# ACUMULADO MENSAL (gráfico) — fora dos 6 cards
+# ======================================================
+st.markdown('<div class="card"><div class="card-title">ACUMULADO MENSAL DE NOTAS AM – AS</div>', unsafe_allow_html=True)
+fig_mensal, tabela_mensal = acumulado_mensal_fig_e_tabela(df_filtro, COL_DATA)
+if fig_mensal is not None:
+    st.plotly_chart(fig_mensal, use_container_width=True)
+else:
+    st.info("Sem dados mensais (DATA vazia/ inválida).")
+st.markdown("</div>", unsafe_allow_html=True)
+
+# ======================================================
+# TABELA NO FINAL (como você pediu)
+# ======================================================
+st.markdown('<div class="card"><div class="card-title">TABELA — VALORES MENSAIS</div>', unsafe_allow_html=True)
+if tabela_mensal is not None:
+    st.dataframe(tabela_mensal, use_container_width=True, hide_index=True)
+else:
+    st.info("Sem tabela mensal para exibir.")
+st.markdown("</div>", unsafe_allow_html=True)
+
+# ======================================================
+# EXPORTAÇÃO
+# ======================================================
 st.markdown('<div class="card"><div class="card-title">EXPORTAR DADOS (FILTRO ATUAL)</div>', unsafe_allow_html=True)
 st.download_button(
     label="⬇️ Baixar CSV",
