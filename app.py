@@ -7,6 +7,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib import colors
+import streamlit.components.v1 as components
 
 # ======================================================
 # CONFIG
@@ -613,6 +614,45 @@ components.html(
       if (target && !target.dataset.bound) {
         target.dataset.bound = "1";
         target.addEventListener('click', () => {
+          window.parent.print();
+        });
+      }
+    </script>
+    """,
+    height=0
+)
+# ======================================================
+# EXPORTAR DASHBOARD (PRINT PARA PDF) - OPÇÃO A
+# ======================================================
+st.markdown("""
+<style>
+@media print {
+  /* remove cabeçalho/rodapé do Streamlit e sidebar */
+  header, footer, [data-testid="stSidebar"], [data-testid="stToolbar"] { display: none !important; }
+  /* remove os botões de exportação na impressão */
+  .no-print { display: none !important; }
+  /* melhora preenchimento ao imprimir */
+  .block-container { max-width: 100% !important; padding: 0 !important; }
+}
+</style>
+""", unsafe_allow_html=True)
+
+# Botão visível (mas escondido no print via class no-print)
+st.markdown('<div class="no-print">', unsafe_allow_html=True)
+st.button("🖨️ Exportar dashboard (print em PDF)")
+st.markdown('</div>', unsafe_allow_html=True)
+
+# Script que vincula o clique do botão ao window.print()
+components.html(
+    """
+    <script>
+      // procura o botão pelo texto e liga o evento uma vez
+      const btns = window.parent.document.querySelectorAll('button');
+      const target = Array.from(btns).find(b => b.innerText.trim() === '🖨️ Exportar dashboard (print em PDF)');
+      if (target && !target.dataset.printBound) {
+        target.dataset.printBound = "1";
+        target.addEventListener('click', () => {
+          window.parent.focus();
           window.parent.print();
         });
       }
