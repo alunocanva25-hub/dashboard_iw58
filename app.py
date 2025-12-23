@@ -355,6 +355,8 @@ def fig_barh(df_base, col_dim, titulo):
     fig.update_yaxes(title_text="")
     return fig
 
+# ... [imports e código anterior permanecem IGUAIS] ...
+
 # ======================================================
 # LAYOUT PRINCIPAL (igual ao print)
 # ======================================================
@@ -366,19 +368,36 @@ with top[0]:
     am = len(df_am)
     az = len(df_as)
     ano_txt = str(ano_ref) if ano_ref else "—"
-    st.markdown(f"""
-    <div class="card">
-      <div class="card-title">ACUMULADO DE NOTAS<br>AM / AS<br>{ano_txt}</div>
-      <div style="text-align:center" class="kpi-big">{total:,}".replace(",", ".") + """</div>
-      <div class="kpi-sub">
-        <div><div class="lbl">AM</div><div class="val">{am:,}</div></div>
-        <div><div class="lbl">AS</div><div class="val">{az:,}</div></div>
-      </div>
-    </div>
-    """.replace("{am:,}", f"{am:,}".replace(",", "."))
-         .replace("{az:,}", f"{az:,}".replace(",", "."))
-         .replace("{total:,}", f"{total:,}".replace(",", ".")),
-    unsafe_allow_html=True)
+
+    total_fmt = f"{total:,}".replace(",", ".")
+    am_fmt    = f"{am:,}".replace(",", ".")
+    as_fmt    = f"{az:,}".replace(",", ".")
+
+    st.markdown(
+        f"""
+        <div class="card">
+          <div class="card-title">
+            ACUMULADO DE NOTAS<br>
+            AM / AS<br>{ano_txt}
+          </div>
+          <div style="text-align:center" class="kpi-big">{total_fmt}</div>
+          <div class="kpi-sub">
+            <div>
+              <div class="lbl">AM</div>
+              <div class="val">{am_fmt}</div>
+            </div>
+            <div>
+              <div class="lbl">AS</div>
+              <div class="val">{as_fmt}</div>
+            </div>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+# ... [RESTO DO SCRIPT CONTINUA IGUAL AO QUE TE MANDEI]
+
 
 # Acumulado anual
 with top[1]:
