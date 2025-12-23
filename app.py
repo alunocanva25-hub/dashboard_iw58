@@ -602,26 +602,6 @@ st.download_button(
     mime="application/pdf"
 )
 
-import streamlit.components.v1 as components
-
-st.button("🖨️ Exportar dashboard (print em PDF)", on_click=lambda: None)
-
-components.html(
-    """
-    <script>
-      const btns = window.parent.document.querySelectorAll('button');
-      const target = Array.from(btns).find(b => b.innerText.includes('Exportar dashboard (print em PDF)'));
-      if (target && !target.dataset.bound) {
-        target.dataset.bound = "1";
-        target.addEventListener('click', () => {
-          window.parent.print();
-        });
-      }
-    </script>
-    """,
-    height=0
-)
-
 # ======================================================
 # EXPORTAR DASHBOARD (PRINT PARA PDF) - OPÇÃO A
 # ======================================================
