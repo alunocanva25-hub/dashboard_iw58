@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import requests
+from io import BytesIO
 
 # ======================================================
 # CONFIGURAÇÃO DA PÁGINA
@@ -58,40 +60,69 @@ def validar_estrutura(df):
         "DATA": ["DATA"]
     }
 
-    problemas = []
-
+    erros = []
     for nome, alternativas in obrigatorias.items():
         if not achar_coluna(df, alternativas):
-            problemas.append(f"❌ Coluna obrigatória não encontrada: {nome}")
+            erros.append(f"❌ Coluna obrigatória não encontrada: {nome}")
 
-    if problemas:
-        st.error("Problemas na estrutura da base:")
-        for p in problemas:
-            st.write(p)
+    if erros:
+        st.error("Problemas encontrados na estrutura da base:")
+        for e in erros:
+            st.write(e)
         st.stop()
 
 # ======================================================
-# CACHE CORRETO (COM TTL + DEPENDÊNCIA DO LINK)
+# CACHE ROBUSTO + GOOGLE DRIVE
 # ======================================================
 @st.cache_data(ttl=600, show_spinner="🔄 Carregando base de dados...")
-def carregar_base(url):
-    df = pd.read_csv(url, sep=None, engine="python", encoding="utf-8-sig")
+def carregar_base(url: str) -> pd.DataFrame:
+    r = requests.get(url, timeout=30)
+    r.raise_for_status()
+
+    raw = r.content
+    head = raw[:300].lstrip().lower()
+
+    # Se o Drive retornar HTML (permissão/link errado)
+    if head.startswith(b"<!doctype html") or b"<html" in head:
+        raise RuntimeError(
+            "O link do Google Drive não está retornando o CSV.\n"
+            "Verifique se o arquivo está compartilhado como:\n"
+            "'Qualquer pessoa com o link → Visualizador'\n"
+            "e se o link está no formato:\n"
+            "https://drive.google.com/uc?id=SEU_ID"
+        )
+
+    encodings = ["utf-8-sig", "utf-8", "cp1252", "latin1"]
+    for enc in encodings:
+        try:
+            df = pd.read_csv(BytesIO(raw), sep=None, engine="python", encoding=enc)
+            df.columns = df.columns.str.upper().str.strip()
+            return df
+        except UnicodeDecodeError:
+            continue
+
+    # fallback final
+    df = pd.read_csv(
+        BytesIO(raw),
+        sep=None,
+        engine="python",
+        encoding="utf-8",
+        encoding_errors="replace"
+    )
     df.columns = df.columns.str.upper().str.strip()
+
+    st.warning(
+        "⚠️ O arquivo não está em UTF-8. "
+        "Caracteres inválidos foram substituídos."
+    )
     return df
 
 # ======================================================
-# BOTÃO ATUALIZAR BASE (FORÇA LIMPEZA DO CACHE)
+# BOTÃO ATUALIZAR BASE
 # ======================================================
-col_refresh, col_info = st.columns([1, 5])
-
-with col_refresh:
-    if st.button("🔄 Atualizar base"):
-        st.cache_data.clear()
-        st.success("Cache limpo. Base será recarregada.")
-        st.rerun()
-
-with col_info:
-    st.caption("Use este botão quando o arquivo no Google Drive for atualizado.")
+if st.button("🔄 Atualizar base"):
+    st.cache_data.clear()
+    st.rerun()
 
 # ======================================================
 # CARREGAMENTO DA BASE
@@ -100,7 +131,7 @@ URL_BASE = "https://drive.google.com/uc?id=1NteTwRrAnnpOCVZH6mlassTzeWKsOdYY"
 df = carregar_base(URL_BASE)
 
 # ======================================================
-# VALIDAÇÃO DA ESTRUTURA DA BASE
+# VALIDAÇÃO DA BASE
 # ======================================================
 validar_estrutura(df)
 
@@ -178,15 +209,12 @@ def donut_resultado(df_base, titulo):
         template="plotly_dark"
     )
 
-# ======================================================
-# LINHA 1 — DONUTS
-# ======================================================
 c1, c2 = st.columns(2)
 c1.plotly_chart(donut_resultado(df_am, f"AM – {estado}"), use_container_width=True)
 c2.plotly_chart(donut_resultado(df_as, f"AS – {estado}"), use_container_width=True)
 
 # ======================================================
-# MOTIVOS (BARRAS)
+# MOTIVOS
 # ======================================================
 def grafico_motivos(df_base, titulo):
     if not COL_MOTIVO:
@@ -211,14 +239,10 @@ def grafico_motivos(df_base, titulo):
         title=titulo,
         template="plotly_dark"
     )
-
     fig.update_traces(textposition="outside")
     fig.update_layout(showlegend=False)
     return fig
 
-# ======================================================
-# LINHA 2 — MOTIVOS
-# ======================================================
 c3, c4 = st.columns(2)
 c3.plotly_chart(grafico_motivos(df_am, f"Motivos AM – {estado}"), use_container_width=True)
 c4.plotly_chart(grafico_motivos(df_as, f"Motivos AS – {estado}"), use_container_width=True)
@@ -231,7 +255,6 @@ def improcedente_regional(df_base, titulo):
         return None
 
     base = df_base[df_base[COL_RESULTADO].str.contains("IMPROCEDENTE", na=False)]
-
     dados = (
         base.groupby(COL_REGIONAL)
         .size()
@@ -248,14 +271,10 @@ def improcedente_regional(df_base, titulo):
         title=titulo,
         template="plotly_dark"
     )
-
     fig.update_traces(textposition="outside")
     fig.update_layout(showlegend=False)
     return fig
 
-# ======================================================
-# LINHA 3 — REGIONAL
-# ======================================================
 c5, c6 = st.columns(2)
 c5.plotly_chart(improcedente_regional(df_am, f"Improcedente Regional AM – {estado}"), use_container_width=True)
 c6.plotly_chart(improcedente_regional(df_as, f"Improcedente Regional AS – {estado}"), use_container_width=True)
@@ -285,24 +304,6 @@ def evolucao_mensal(df_base):
         title="📅 AM x AS por Mês",
         template="plotly_dark"
     )
-
     fig.update_traces(textposition="outside")
-    fig.update_layout(
-        xaxis_title="Mês",
-        yaxis_title="Quantidade"
-    )
-    return fig
-
-st.plotly_chart(evolucao_mensal(df_filtro), use_container_width=True)
-
-# ======================================================
-# EXPORTAÇÃO
-# ======================================================
-st.subheader("📤 Exportar Dados")
-
-st.download_button(
-    label="⬇️ Baixar CSV",
-    data=df_filtro.to_csv(index=False).encode("utf-8"),
-    file_name="IW58_Dashboard.csv",
-    mime="text/csv"
-)
+    fig.update_layout(xaxis_title="Mês", yaxis_title="Quantidade")
+    re
