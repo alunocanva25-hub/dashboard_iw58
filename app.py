@@ -307,28 +307,18 @@ def barh_contagem(df_base, col_dim, titulo, uf):
     fig.update_layout(
         height=300,
         margin=dict(l=10, r=10, t=70, b=10),
-        showlegend=False
+        showlegend=False,
+        xaxis=dict(visible=False)  # 🔥 FORÇA ocultar eixo X
     )
 
-    # ✅ texto fora da barra
     fig.update_traces(
         textposition="outside",
         cliponaxis=False
     )
 
-    # ✅ remove COMPLETAMENTE o eixo X (linha, números e grid)
-    fig.update_xaxes(
-        visible=False,
-        showgrid=False,
-        zeroline=False
-    )
+    fig.update_yaxes(title_text="")
 
-    # ✅ mantém apenas categorias no eixo Y
-    fig.update_yaxes(
-        title_text=""
-    )
-
-    # ✅ anotação com TOTAL
+    # ✅ TOTAL DO GRÁFICO (único)
     fig.add_annotation(
         xref="paper",
         yref="paper",
@@ -336,7 +326,11 @@ def barh_contagem(df_base, col_dim, titulo, uf):
         y=1.12,
         text=f"TOTAL: {total_fmt}",
         showarrow=False,
-        font=dict(size=13, color="#0b2b45", family="Arial Black"),
+        font=dict(
+            size=13,
+            color="#0b2b45",
+            family="Arial Black"
+        ),
         align="right"
     )
 
