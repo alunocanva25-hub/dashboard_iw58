@@ -432,11 +432,19 @@ def acumulado_mensal_fig_e_tabela(df_base, col_data):
 
         fig.add_annotation(
             x=mes, xref="x",
-            yref="paper", y=-0.40,   # <- abaixo do eixo
-            text=(f"<span style='color:{COR_PROC};'><b>PROCEDENTE:</b> {p_fmt}</span><br>"f"<span style='color:{COR_IMP};'><b>IMPROCEDENTE:</b> {i_fmt}</span><br>"f"<span style='color:#fcba03;'><b>TOTAL:</b> {t_fmt}</span>"),
+            yref="paper", y=-0.42,   # abaixo do eixo (bloco tipo tabela)
+            text=(
+                f"<table style='margin:auto;border-collapse:collapse;'>"
+                f"<tr><td style='color:{COR_PROC};font-size:14px;padding-right:6px;'>■</td>"
+                f"<td style='color:#0b2b45;font-family:Arial Black;font-size:12px;text-align:right;'>{p_fmt}</td></tr>"
+                f"<tr><td style='color:{COR_IMP};font-size:14px;padding-right:6px;'>■</td>"
+                f"<td style='color:#0b2b45;font-family:Arial Black;font-size:12px;text-align:right;'>{i_fmt}</td></tr>"
+                f"<tr><td style='color:#fcba03;font-size:14px;padding-right:6px;'>■</td>"
+                f"<td style='color:#0b2b45;font-family:Arial Black;font-size:12px;text-align:right;'>{t_fmt}</td></tr>"
+                f"</table>"
+            ),
             showarrow=False,
             align="center",
-            font=dict(size=11, color="#0b2b45", family="Arial Black"),
         )
     return fig, tabela
 
