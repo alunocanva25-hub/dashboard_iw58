@@ -654,9 +654,6 @@ else:
     st.info("Sem tabela mensal para exibir.")
 
 st.markdown("</div>", unsafe_allow_html=True)
-else:
-    st.info("Sem tabela mensal para exibir.")
-st.markdown("</div>", unsafe_allow_html=True)
 
 def gerar_pdf(df_tabela, ano_ref, uf_sel):
     buffer = BytesIO()
