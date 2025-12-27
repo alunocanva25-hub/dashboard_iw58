@@ -459,7 +459,7 @@ with row1[2]:
         st.plotly_chart(fig, use_container_width=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
-row2 = st.columns([1.3, 1.3, 1.3], gap="large")
+row2 = st.columns([1.7, 1.7, 1.7], gap="large")
 
 with row2[0]:
     st.markdown('<div class="card"><div class="card-title">IMPROCEDÊNCIAS POR REGIONAL – NOTA AM</div>', unsafe_allow_html=True)
