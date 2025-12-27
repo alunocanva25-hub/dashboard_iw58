@@ -643,9 +643,17 @@ def acumulado_mensal_fig_e_tabela(df_base, col_data):
 # ======================================================
 # TABELA NO FINAL
 # ======================================================
-st.markdown('<div class="card"><div class="card-title">TABELA — VALORES MENSAIS</div>', unsafe_allow_html=True)
+st.markdown(
+    '<div class="card"><div class="card-title">TABELA — VALORES MENSAIS</div>',
+    unsafe_allow_html=True
+)
+
 if tabela_mensal is not None:
     st.dataframe(tabela_mensal, use_container_width=True, hide_index=True)
+else:
+    st.info("Sem tabela mensal para exibir.")
+
+st.markdown("</div>", unsafe_allow_html=True)
 else:
     st.info("Sem tabela mensal para exibir.")
 st.markdown("</div>", unsafe_allow_html=True)
