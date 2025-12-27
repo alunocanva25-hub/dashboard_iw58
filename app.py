@@ -300,7 +300,6 @@ fig.update_traces(textposition="outside", cliponaxis=False)
 
 # ✅ remove COMPLETAMENTE o eixo X (números 0, 200, 400...)
 fig.update_xaxes(visible=False)
-
 # ✅ mantém apenas as categorias (eixo Y)
 fig.update_yaxes(title_text="")
 
