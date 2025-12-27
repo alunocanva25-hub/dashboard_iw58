@@ -643,18 +643,6 @@ def acumulado_mensal_fig_e_tabela(df_base, col_data):
 # ======================================================
 # TABELA NO FINAL
 # ======================================================
-st.markdown(
-    '<div class="card"><div class="card-title">TABELA — VALORES MENSAIS</div>',
-    unsafe_allow_html=True
-)
-
-if tabela_mensal is not None:
-    st.dataframe(tabela_mensal, use_container_width=True, hide_index=True)
-else:
-    st.info("Sem tabela mensal para exibir.")
-
-st.markdown("</div>", unsafe_allow_html=True)
-
 def gerar_pdf(df_tabela, ano_ref, uf_sel):
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
