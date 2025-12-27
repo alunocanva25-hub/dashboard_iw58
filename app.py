@@ -9,7 +9,6 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from reportlab.lib import colors
 import streamlit.components.v1 as components
 
-st.error("RODANDO ESTE ARQUIVO AGORA ✅ build=TESTE-647-A")
 # ======================================================
 # CONFIG
 # ======================================================
@@ -396,8 +395,8 @@ def acumulado_mensal_fig_e_tabela(df_base, col_data):
 
     # ✅ margens grandes para NÃO cortar o que está fora do plot
     fig.update_layout(
-        height=380,
-        margin=dict(l=10, r=180, t=70, b=160),
+        height=460,
+        margin=dict(l=10, r=220, t=70, b=220),
         legend_title_text="",
     )
     fig.update_traces(textposition="outside", cliponaxis=False)
@@ -407,7 +406,7 @@ def acumulado_mensal_fig_e_tabela(df_base, col_data):
     # ✅ TOTAL (dentro da área, sem cortar)
     fig.add_annotation(
         xref="paper", yref="paper",
-        x=1.02, y=0.55,
+        x=0.99, y=0.62,
         text=f"<b>TOTAL</b><br>{total_geral_fmt}",
         showarrow=False,
         align="center",
@@ -431,13 +430,12 @@ def acumulado_mensal_fig_e_tabela(df_base, col_data):
 
         fig.add_annotation(
             x=mes, xref="x",
-            yref="paper", y=-0.42,   # <- desce bem para aparecer
+            yref="paper", y=-0.33,   # <- abaixo do eixo
             text=f"P:{p_fmt}<br>I:{i_fmt}<br><b>T:{t_fmt}</b>",
             showarrow=False,
             align="center",
             font=dict(size=11, color="#0b2b45", family="Arial Black"),
         )
-  st.warning("✅ FUNÇÃO ACUMULADO MENSAL ATUALIZADA (VERSÃO NOVA)")
     return fig, tabela
 
 def resumo_por_localidade_html(df_base, col_local, selecionado, top_n=12):
