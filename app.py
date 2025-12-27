@@ -434,8 +434,8 @@ def acumulado_mensal_fig_e_tabela(df_base, col_data):
     # =====================================================
 
     # 🔧 CONTROLES DE POSIÇÃO (AJUSTE AQUI 👇)
-    x_pos = -0.14        # ➡️ (-) mais esquerda | (+) mais direita
-    y_inicio = 0.80      # ⬆️ aumenta sobe | ⬇️ diminui desce
+    x_pos = -0.20        # ➡️ (-) mais esquerda | (+) mais direita
+    y_inicio = 0.50      # ⬆️ aumenta sobe | ⬇️ diminui desce
     espacamento = 0.08   # distância entre linhas
 
     resumo = [
