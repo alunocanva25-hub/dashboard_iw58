@@ -336,11 +336,6 @@ def barh_contagem(df_base, col_dim, titulo, uf):
 
     return _titulo_plotly(fig, titulo, uf)
 
-def acumulado_mensal_fig_e_tabela(df_base, col_data):
-    base = df_base.dropna(subset=[col_data]).copy()
-    if base.empty:
-        return None, None
-
     base["MES_NUM"] = base[col_data].dt.month
     base["MÊS"] = base["MES_NUM"].map(MESES_PT)
 
@@ -560,18 +555,18 @@ def acumulado_mensal_fig_e_tabela(df_base, col_data):
         .sort_values("MES_NUM")
     )
 
-    # % por mês (para manter os percentuais nas barras)
+    # % por mês (pra manter os percentuais nas barras)
     total_mes = dados.groupby("MES_NUM")["QTD"].transform("sum")
     dados["PCT"] = (dados["QTD"] / total_mes * 100).round(0)
 
-    # Labels de % somente em PROCEDENTE e IMPROCEDENTE (como você já tinha)
+    # Labels de % somente em PROCEDENTE e IMPROCEDENTE
     dados["LABEL"] = ""
     mask_proc = dados["_CLASSE_"] == "PROCEDENTE"
     mask_imp  = dados["_CLASSE_"] == "IMPROCEDENTE"
     dados.loc[mask_proc, "LABEL"] = dados.loc[mask_proc, "PCT"].astype(int).astype(str) + "%"
     dados.loc[mask_imp,  "LABEL"] = dados.loc[mask_imp,  "PCT"].astype(int).astype(str) + "%"
 
-    # ===== tabela/pivot para pegar contagens por mês =====
+    # ===== Pivot (tabela) com contagens por mês =====
     tab = (
         dados.pivot_table(index=["MES_NUM", "MÊS"], columns="_CLASSE_", values="QTD", fill_value=0)
         .reset_index()
@@ -581,8 +576,11 @@ def acumulado_mensal_fig_e_tabela(df_base, col_data):
             tab[c] = 0
 
     tab["TOTAL"] = tab["IMPROCEDENTE"] + tab["PROCEDENTE"] + tab["OUTROS"]
-    tab = tab.sort_values("MES_NUM").drop(columns=["MES_NUM"])
-    tab = tab[["MÊS", "IMPROCEDENTE", "PROCEDENTE", "TOTAL"]]
+    tab = tab.sort_values("MES_NUM")
+
+    # Tabela final para exibir no app
+    tab_final = tab.drop(columns=["MES_NUM"]).copy()
+    tab_final = tab_final[["MÊS", "IMPROCEDENTE", "PROCEDENTE", "TOTAL"]]
 
     # ===== GRÁFICO =====
     fig = px.bar(
@@ -604,40 +602,39 @@ def acumulado_mensal_fig_e_tabela(df_base, col_data):
         }
     )
 
-    # Layout para caber:
-    # - total à direita (margem r maior)
-    # - blocos abaixo do eixo (margem b maior)
+    # Layout para:
+    # - reservar espaço à direita pro TOTAL
+    # - reservar espaço embaixo para IMP/PROC/TOTAL por mês
     fig.update_layout(
-        height=360,
-        margin=dict(l=10, r=130, t=55, b=95),
+        height=380,
+        margin=dict(l=10, r=170, t=55, b=120),
         legend_title_text="",
     )
     fig.update_traces(textposition="outside", cliponaxis=False)
     fig.update_xaxes(title_text="", tickangle=0)
     fig.update_yaxes(title_text="")
 
-    # ===== (1) TOTAL DO GRÁFICO À DIREITA =====
+    # ===== (1) TOTAL GERAL do gráfico (lado direito) =====
     total_geral = int(tab["TOTAL"].sum())
     total_geral_fmt = f"{total_geral:,}".replace(",", ".")
+
     fig.add_annotation(
         xref="paper",
         yref="paper",
-        x=1.06,           # fora do plot, na área da direita
+        x=1.08,          # joga pra direita
         y=0.55,
         text=f"<b>TOTAL</b><br>{total_geral_fmt}",
         showarrow=False,
         align="center",
-        font=dict(size=16, color="#0b2b45", family="Arial Black"),
+        font=dict(size=18, color="#0b2b45", family="Arial Black"),
         bgcolor="rgba(255,255,255,0.55)",
         bordercolor="rgba(10,40,70,0.22)",
         borderwidth=2,
         borderpad=10
     )
 
-    # ===== (2) ABAIXO DE CADA MÊS: IMP / PROC / TOTAL =====
-    # Coloca uma “mini-legenda” por mês, abaixo do eixo X.
-    # OBS: y é em paper (0=base do gráfico, valores negativos ficam abaixo)
-    # Ajuste fino: y=-0.28 / -0.30 se quiser mais pra baixo.
+    # ===== (2) ABAIXO DE CADA MÊS: IMP / PROC / TOTAL (quantidades) =====
+    # y em "paper": valores negativos aparecem abaixo do eixo
     for _, r in tab.iterrows():
         mes = r["MÊS"]
         imp = int(r["IMPROCEDENTE"])
@@ -652,7 +649,7 @@ def acumulado_mensal_fig_e_tabela(df_base, col_data):
             xref="x",
             yref="paper",
             x=mes,
-            y=-0.30,
+            y=-0.35,
             text=(
                 f"<span style='color:{COR_IMP};'><b>I:</b> {imp_fmt}</span><br>"
                 f"<span style='color:{COR_PROC};'><b>P:</b> {proc_fmt}</span><br>"
@@ -663,7 +660,8 @@ def acumulado_mensal_fig_e_tabela(df_base, col_data):
             font=dict(size=10, color="#0b2b45", family="Arial"),
         )
 
-    return fig, tab
+    return fig, tab_final
+
 
 # ======================================================
 # TABELA NO FINAL
