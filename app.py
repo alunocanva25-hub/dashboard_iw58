@@ -328,7 +328,7 @@ def barh_contagem(df_base, col_dim, titulo, uf):
         showarrow=False,
         font=dict(
             size=13,
-            color="#0b2b45",
+            color="#fcba03",
             family="Arial Black"
         ),
         align="right"
