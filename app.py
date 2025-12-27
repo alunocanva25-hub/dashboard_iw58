@@ -38,6 +38,7 @@ st.markdown("""
   text-transform: uppercase;
   margin-bottom: 10px;
   letter-spacing: .3px;
+  text-align: center;
 }
 
 .kpi-row{
@@ -257,8 +258,8 @@ def _titulo_plotly(fig, titulo: str, uf: str):
     uf_txt = uf if uf != "TOTAL" else "TODOS"
     fig.update_layout(
         title=f"{titulo} • {uf_txt}",
-        title_x=0.3,
-        title_font=dict(size=14, color="#FFFFFF", family="Arial Black")
+        title_x=0.5,
+        title_font=dict(size=14, color="#0b2b45", family="Arial Black")
     )
     return fig
 
@@ -279,14 +280,44 @@ def donut_resultado(df_base):
 def barh_contagem(df_base, col_dim, titulo, uf):
     if col_dim is None or df_base.empty:
         return None
+
     dados = df_base.groupby(col_dim).size().reset_index(name="QTD").sort_values("QTD")
     if dados.empty:
         return None
+
+    total = int(dados["QTD"].sum())
+    total_fmt = f"{total:,}".replace(",", ".")
+
     fig = px.bar(dados, x="QTD", y=col_dim, orientation="h", text="QTD", template="plotly_white")
-    fig.update_layout(height=300, margin=dict(l=10, r=10, t=70, b=10), showlegend=False)
+
+    fig.update_layout(
+        height=300,
+        margin=dict(l=10, r=10, t=70, b=10),
+        showlegend=False
+    )
     fig.update_traces(textposition="outside", cliponaxis=False)
-    fig.update_xaxes(title_text="")
+
+    # 🔥 Oculta os números do eixo X (0, 200, 400...)
+    fig.update_xaxes(
+        title_text="",
+        showticklabels=False,
+        showgrid=False,
+        zeroline=False
+    )
     fig.update_yaxes(title_text="")
+
+    # ✅ Mostra apenas o TOTAL do gráfico
+    fig.add_annotation(
+        xref="paper",
+        yref="paper",
+        x=0.98,
+        y=1.12,
+        text=f"TOTAL: {total_fmt}",
+        showarrow=False,
+        font=dict(size=13, color="#0b2b45", family="Arial Black"),
+        align="right"
+    )
+
     return _titulo_plotly(fig, titulo, uf)
 
 def acumulado_mensal_fig_e_tabela(df_base, col_data):
