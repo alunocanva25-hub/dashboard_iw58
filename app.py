@@ -546,6 +546,9 @@ def acumulado_mensal_fig_e_tabela(df_base, col_data):
     if base.empty:
         return None, None
 
+    # ======================
+    # PREPARAÇÃO DOS DADOS
+    # ======================
     base["MES_NUM"] = base[col_data].dt.month
     base["MÊS"] = base["MES_NUM"].map(MESES_PT)
 
@@ -564,7 +567,9 @@ def acumulado_mensal_fig_e_tabela(df_base, col_data):
     total_mes = dados.groupby("MES_NUM")["QTD"].transform("sum")
     dados["PCT"] = (dados["QTD"] / total_mes * 100).round(0)
 
-    # ===== GRÁFICO =====
+    # ======================
+    # GRÁFICO
+    # ======================
     fig = px.bar(
         dados,
         x="MÊS",
@@ -582,17 +587,24 @@ def acumulado_mensal_fig_e_tabela(df_base, col_data):
 
     fig.update_layout(
         height=360,
-        margin=dict(l=10, r=10, t=70, b=90),
+        margin=dict(l=10, r=10, t=70, b=100),
         legend_title_text=""
     )
 
     fig.update_xaxes(title_text="")
     fig.update_yaxes(title_text="")
 
-    # ===== TABELA AUXILIAR PARA ANOTAÇÕES =====
+    # ======================
+    # TABELA AUXILIAR
+    # ======================
     tab = (
         dados
-        .pivot_table(index=["MES_NUM", "MÊS"], columns="_CLASSE_", values="QTD", fill_value=0)
+        .pivot_table(
+            index=["MES_NUM", "MÊS"],
+            columns="_CLASSE_",
+            values="QTD",
+            fill_value=0
+        )
         .reset_index()
         .sort_values("MES_NUM")
     )
@@ -603,7 +615,9 @@ def acumulado_mensal_fig_e_tabela(df_base, col_data):
 
     tab["TOTAL"] = tab["PROCEDENTE"] + tab["IMPROCEDENTE"]
 
-    # ===== ANOTAÇÕES ABAIXO DE CADA MÊS =====
+    # ======================
+    # ANOTAÇÕES ABAIXO DO MÊS
+    # ======================
     for _, r in tab.iterrows():
         texto = (
             f"Imp: {int(r['IMPROCEDENTE'])}<br>"
@@ -613,7 +627,7 @@ def acumulado_mensal_fig_e_tabela(df_base, col_data):
 
         fig.add_annotation(
             x=r["MÊS"],
-            y=-0.05,
+            y=-0.08,
             xref="x",
             yref="paper",
             text=texto,
@@ -625,8 +639,7 @@ def acumulado_mensal_fig_e_tabela(df_base, col_data):
     tab_final = tab[["MÊS", "IMPROCEDENTE", "PROCEDENTE", "TOTAL"]]
 
     return fig, tab_final
-      )
-
+    
 # ======================================================
 # TABELA NO FINAL
 # ======================================================
