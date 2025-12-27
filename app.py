@@ -281,29 +281,54 @@ def barh_contagem(df_base, col_dim, titulo, uf):
     if col_dim is None or df_base.empty:
         return None
 
-    dados = df_base.groupby(col_dim).size().reset_index(name="QTD").sort_values("QTD")
+    dados = (
+        df_base
+        .groupby(col_dim)
+        .size()
+        .reset_index(name="QTD")
+        .sort_values("QTD")
+    )
+
     if dados.empty:
         return None
 
     total = int(dados["QTD"].sum())
     total_fmt = f"{total:,}".replace(",", ".")
 
-    fig = px.bar(dados, x="QTD", y=col_dim, orientation="h", text="QTD", template="plotly_white")
+    fig = px.bar(
+        dados,
+        x="QTD",
+        y=col_dim,
+        orientation="h",
+        text="QTD",
+        template="plotly_white"
+    )
 
     fig.update_layout(
-    height=300,
-    margin=dict(l=10, r=10, t=70, b=10),
-    showlegend=False
-)
+        height=300,
+        margin=dict(l=10, r=10, t=70, b=10),
+        showlegend=False
+    )
 
-fig.update_traces(textposition="outside", cliponaxis=False)
+    # ✅ texto fora da barra
+    fig.update_traces(
+        textposition="outside",
+        cliponaxis=False
+    )
 
-# ✅ remove COMPLETAMENTE o eixo X (números 0, 200, 400...)
-fig.update_xaxes(visible=False)
-# ✅ mantém apenas as categorias (eixo Y)
-fig.update_yaxes(title_text="")
+    # ✅ remove COMPLETAMENTE o eixo X (linha, números e grid)
+    fig.update_xaxes(
+        visible=False,
+        showgrid=False,
+        zeroline=False
+    )
 
-    # ✅ Mostra apenas o TOTAL do gráfico
+    # ✅ mantém apenas categorias no eixo Y
+    fig.update_yaxes(
+        title_text=""
+    )
+
+    # ✅ anotação com TOTAL
     fig.add_annotation(
         xref="paper",
         yref="paper",
