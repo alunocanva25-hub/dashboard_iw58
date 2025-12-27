@@ -324,7 +324,7 @@ def barh_contagem(df_base, col_dim, titulo, uf):
     fig.add_annotation(
         xref="paper",
         yref="paper",
-        x=0.98,
+        x=1.08,
         y=1.12,
         text=f"TOTAL: {total_fmt}",
         showarrow=False,
