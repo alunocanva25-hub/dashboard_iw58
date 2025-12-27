@@ -543,12 +543,15 @@ with row2[2]:
 # ACUMULADO MENSAL
 # ======================================================
 st.markdown('<div class="card"><div class="card-title">ACUMULADO MENSAL DE NOTAS AM – AS</div>', unsafe_allow_html=True)
+
 fig_mensal, tabela_mensal = acumulado_mensal_fig_e_tabela(df_filtro, COL_DATA)
+
 if fig_mensal is not None:
     fig_mensal = _titulo_plotly(fig_mensal, "ACUMULADO MENSAL DE NOTAS AM – AS", uf_sel)
     st.plotly_chart(fig_mensal, use_container_width=True)
 else:
     st.info("Sem dados mensais (DATA vazia/ inválida).")
+
 st.markdown("</div>", unsafe_allow_html=True)
 
 # ======================================================
