@@ -291,20 +291,17 @@ def barh_contagem(df_base, col_dim, titulo, uf):
     fig = px.bar(dados, x="QTD", y=col_dim, orientation="h", text="QTD", template="plotly_white")
 
     fig.update_layout(
-        height=300,
-        margin=dict(l=10, r=10, t=70, b=10),
-        showlegend=False
-    )
-    fig.update_traces(textposition="outside", cliponaxis=False)
+    height=300,
+    margin=dict(l=10, r=10, t=70, b=10),
+    showlegend=False
+)
+fig.update_traces(textposition="outside", cliponaxis=False)
 
-    # 🔥 Oculta os números do eixo X (0, 200, 400...)
-    fig.update_xaxes(
-        title_text="",
-        showticklabels=False,
-        showgrid=False,
-        zeroline=False
-    )
-    fig.update_yaxes(title_text="")
+# ✅ some com o eixo X inteiro
+fig.update_xaxes(visible=False)
+
+# mantém os nomes das categorias (eixo Y)
+fig.update_yaxes(title_text="")
 
     # ✅ Mostra apenas o TOTAL do gráfico
     fig.add_annotation(
