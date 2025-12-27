@@ -541,14 +541,90 @@ with row2[2]:
 # ======================================================
 # ACUMULADO MENSAL
 # ======================================================
-st.markdown('<div class="card"><div class="card-title">ACUMULADO MENSAL DE NOTAS AM – AS</div>', unsafe_allow_html=True)
-fig_mensal, tabela_mensal = acumulado_mensal_fig_e_tabela(df_filtro, COL_DATA)
-if fig_mensal is not None:
-    fig_mensal = _titulo_plotly(fig_mensal, "ACUMULADO MENSAL DE NOTAS AM – AS", uf_sel)
-    st.plotly_chart(fig_mensal, use_container_width=True)
-else:
-    st.info("Sem dados mensais (DATA vazia/ inválida).")
-st.markdown("</div>", unsafe_allow_html=True)
+def acumulado_mensal_fig_e_tabela(df_base, col_data):
+    base = df_base.dropna(subset=[col_data]).copy()
+    if base.empty:
+        return None, None
+
+    base["MES_NUM"] = base[col_data].dt.month
+    base["MÊS"] = base["MES_NUM"].map(MESES_PT)
+
+    base["_CLASSE_"] = "OUTROS"
+    base.loc[base["_RES_"].str.contains("PROCED", na=False), "_CLASSE_"] = "PROCEDENTE"
+    base.loc[base["_RES_"].str.contains("IMPROCED", na=False), "_CLASSE_"] = "IMPROCEDENTE"
+
+    dados = (
+        base
+        .groupby(["MES_NUM", "MÊS", "_CLASSE_"])
+        .size()
+        .reset_index(name="QTD")
+        .sort_values("MES_NUM")
+    )
+
+    total_mes = dados.groupby("MES_NUM")["QTD"].transform("sum")
+    dados["PCT"] = (dados["QTD"] / total_mes * 100).round(0)
+
+    # ===== GRÁFICO =====
+    fig = px.bar(
+        dados,
+        x="MÊS",
+        y="QTD",
+        color="_CLASSE_",
+        barmode="stack",
+        category_orders={"MÊS": MESES_ORDEM},
+        template="plotly_white",
+        color_discrete_map={
+            "PROCEDENTE": COR_PROC,
+            "IMPROCEDENTE": COR_IMP,
+            "OUTROS": COR_OUT
+        }
+    )
+
+    fig.update_layout(
+        height=360,
+        margin=dict(l=10, r=10, t=70, b=90),
+        legend_title_text=""
+    )
+
+    fig.update_xaxes(title_text="")
+    fig.update_yaxes(title_text="")
+
+    # ===== TABELA AUXILIAR PARA ANOTAÇÕES =====
+    tab = (
+        dados
+        .pivot_table(index=["MES_NUM", "MÊS"], columns="_CLASSE_", values="QTD", fill_value=0)
+        .reset_index()
+        .sort_values("MES_NUM")
+    )
+
+    for c in ["PROCEDENTE", "IMPROCEDENTE"]:
+        if c not in tab.columns:
+            tab[c] = 0
+
+    tab["TOTAL"] = tab["PROCEDENTE"] + tab["IMPROCEDENTE"]
+
+    # ===== ANOTAÇÕES ABAIXO DE CADA MÊS =====
+    for _, r in tab.iterrows():
+        texto = (
+            f"Imp: {int(r['IMPROCEDENTE'])}<br>"
+            f"Proc: {int(r['PROCEDENTE'])}<br>"
+            f"<b>Total: {int(r['TOTAL'])}</b>"
+        )
+
+        fig.add_annotation(
+            x=r["MÊS"],
+            y=-0.05,
+            xref="x",
+            yref="paper",
+            text=texto,
+            showarrow=False,
+            font=dict(size=11, color="#0b2b45"),
+            align="center"
+        )
+
+    tab_final = tab[["MÊS", "IMPROCEDENTE", "PROCEDENTE", "TOTAL"]]
+
+    return fig, tab_final
 
 # ======================================================
 # TABELA NO FINAL
