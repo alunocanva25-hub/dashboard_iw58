@@ -641,46 +641,6 @@ def acumulado_mensal_fig_e_tabela(df_base, col_data):
     return fig, tab_final
     
 # ======================================================
-# TABELA NO FINAL
-# ======================================================
-def gerar_pdf(df_tabela, ano_ref, uf_sel):
-    buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
-    styles = getSampleStyleSheet()
-    elementos = []
-    elementos.append(Paragraph(f"<b>DASHBOARD NOTAS AM x AS – {ano_ref}</b>", styles["Title"]))
-    elementos.append(Spacer(1, 12))
-    elementos.append(Paragraph(f"<b>UF selecionada:</b> {uf_sel}", styles["Normal"]))
-    elementos.append(Spacer(1, 12))
-
-    total = len(df_filtro); am = len(df_am); az = len(df_as)
-    elementos.append(Paragraph(
-        f"<b>Total de Notas:</b> {total}<br/>"
-        f"<b>AM:</b> {am} &nbsp;&nbsp; <b>AS:</b> {az}",
-        styles["Normal"]
-    ))
-    elementos.append(Spacer(1, 14))
-
-    if df_tabela is not None and not df_tabela.empty:
-        data = [df_tabela.columns.tolist()] + df_tabela.values.tolist()
-        tabela = Table(data, repeatRows=1)
-        tabela.setStyle(TableStyle([
-            ("BACKGROUND", (0,0), (-1,0), colors.lightgrey),
-            ("GRID", (0,0), (-1,-1), 0.5, colors.grey),
-            ("ALIGN", (1,1), (-1,-1), "CENTER"),
-            ("FONT", (0,0), (-1,0), "Helvetica-Bold"),
-            ("BOTTOMPADDING", (0,0), (-1,0), 8),
-            ("TOPPADDING", (0,0), (-1,0), 8),
-        ]))
-        elementos.append(Paragraph("<b>Resumo Mensal</b>", styles["Heading2"]))
-        elementos.append(Spacer(1, 8))
-        elementos.append(tabela)
-
-    doc.build(elementos)
-    buffer.seek(0)
-    return buffer
-
-# ======================================================
 # EXPORTAÇÃO (PDF)
 # ======================================================
 pdf_buffer = gerar_pdf(df_tabela=tabela_mensal, ano_ref=ano_txt, uf_sel=uf_sel)
