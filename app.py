@@ -336,6 +336,11 @@ def barh_contagem(df_base, col_dim, titulo, uf):
 
     return _titulo_plotly(fig, titulo, uf)
 
+def acumulado_mensal_fig_e_tabela(df_base, col_data):
+    base = df_base.dropna(subset=[col_data]).copy()
+    if base.empty:
+        return None, None
+
     base["MES_NUM"] = base[col_data].dt.month
     base["MÊS"] = base["MES_NUM"].map(MESES_PT)
 
@@ -534,30 +539,140 @@ with row2[2]:
     st.markdown("</div>", unsafe_allow_html=True)
 
 # ======================================================
-# ACUMULADO MENSAL (gráfico)
+# ACUMULADO MENSAL
 # ======================================================
-st.markdown('<div class="card"><div class="card-title">ACUMULADO MENSAL DE NOTAS AM – AS</div>', unsafe_allow_html=True)
+def acumulado_mensal_fig_e_tabela(df_base, col_data):
+    base = df_base.dropna(subset=[col_data]).copy()
+    if base.empty:
+        return None, None
 
-fig_mensal, tabela_mensal = acumulado_mensal_fig_e_tabela(df_filtro, COL_DATA)
+    base["MES_NUM"] = base[col_data].dt.month
+    base["MÊS"] = base["MES_NUM"].map(MESES_PT)
 
-if fig_mensal is not None:
-    fig_mensal = _titulo_plotly(fig_mensal, "ACUMULADO MENSAL DE NOTAS AM – AS", uf_sel)
-    st.plotly_chart(fig_mensal, use_container_width=True)
-else:
-    st.info("Sem dados mensais (DATA vazia/ inválida).")
+    base["_CLASSE_"] = "OUTROS"
+    base.loc[base["_RES_"].str.contains("PROCED", na=False), "_CLASSE_"] = "PROCEDENTE"
+    base.loc[base["_RES_"].str.contains("IMPROCED", na=False), "_CLASSE_"] = "IMPROCEDENTE"
 
-st.markdown("</div>", unsafe_allow_html=True)
+    dados = (
+        base.groupby(["MES_NUM", "MÊS", "_CLASSE_"])
+        .size()
+        .reset_index(name="QTD")
+        .sort_values("MES_NUM")
+    )
+
+    # % por mês (para manter os percentuais nas barras)
+    total_mes = dados.groupby("MES_NUM")["QTD"].transform("sum")
+    dados["PCT"] = (dados["QTD"] / total_mes * 100).round(0)
+
+    # Labels de % somente em PROCEDENTE e IMPROCEDENTE (como você já tinha)
+    dados["LABEL"] = ""
+    mask_proc = dados["_CLASSE_"] == "PROCEDENTE"
+    mask_imp  = dados["_CLASSE_"] == "IMPROCEDENTE"
+    dados.loc[mask_proc, "LABEL"] = dados.loc[mask_proc, "PCT"].astype(int).astype(str) + "%"
+    dados.loc[mask_imp,  "LABEL"] = dados.loc[mask_imp,  "PCT"].astype(int).astype(str) + "%"
+
+    # ===== tabela/pivot para pegar contagens por mês =====
+    tab = (
+        dados.pivot_table(index=["MES_NUM", "MÊS"], columns="_CLASSE_", values="QTD", fill_value=0)
+        .reset_index()
+    )
+    for c in ["IMPROCEDENTE", "PROCEDENTE", "OUTROS"]:
+        if c not in tab.columns:
+            tab[c] = 0
+
+    tab["TOTAL"] = tab["IMPROCEDENTE"] + tab["PROCEDENTE"] + tab["OUTROS"]
+    tab = tab.sort_values("MES_NUM").drop(columns=["MES_NUM"])
+    tab = tab[["MÊS", "IMPROCEDENTE", "PROCEDENTE", "TOTAL"]]
+
+    # ===== GRÁFICO =====
+    fig = px.bar(
+        dados,
+        x="MÊS",
+        y="QTD",
+        color="_CLASSE_",
+        barmode="stack",
+        text="LABEL",
+        category_orders={
+            "MÊS": MESES_ORDEM,
+            "_CLASSE_": ["PROCEDENTE", "IMPROCEDENTE", "OUTROS"]
+        },
+        template="plotly_white",
+        color_discrete_map={
+            "PROCEDENTE": COR_PROC,
+            "IMPROCEDENTE": COR_IMP,
+            "OUTROS": COR_OUT
+        }
+    )
+
+    # Layout para caber:
+    # - total à direita (margem r maior)
+    # - blocos abaixo do eixo (margem b maior)
+    fig.update_layout(
+        height=360,
+        margin=dict(l=10, r=130, t=55, b=95),
+        legend_title_text="",
+    )
+    fig.update_traces(textposition="outside", cliponaxis=False)
+    fig.update_xaxes(title_text="", tickangle=0)
+    fig.update_yaxes(title_text="")
+
+    # ===== (1) TOTAL DO GRÁFICO À DIREITA =====
+    total_geral = int(tab["TOTAL"].sum())
+    total_geral_fmt = f"{total_geral:,}".replace(",", ".")
+    fig.add_annotation(
+        xref="paper",
+        yref="paper",
+        x=1.06,           # fora do plot, na área da direita
+        y=0.55,
+        text=f"<b>TOTAL</b><br>{total_geral_fmt}",
+        showarrow=False,
+        align="center",
+        font=dict(size=16, color="#0b2b45", family="Arial Black"),
+        bgcolor="rgba(255,255,255,0.55)",
+        bordercolor="rgba(10,40,70,0.22)",
+        borderwidth=2,
+        borderpad=10
+    )
+
+    # ===== (2) ABAIXO DE CADA MÊS: IMP / PROC / TOTAL =====
+    # Coloca uma “mini-legenda” por mês, abaixo do eixo X.
+    # OBS: y é em paper (0=base do gráfico, valores negativos ficam abaixo)
+    # Ajuste fino: y=-0.28 / -0.30 se quiser mais pra baixo.
+    for _, r in tab.iterrows():
+        mes = r["MÊS"]
+        imp = int(r["IMPROCEDENTE"])
+        proc = int(r["PROCEDENTE"])
+        tot = int(r["TOTAL"])
+
+        imp_fmt = f"{imp:,}".replace(",", ".")
+        proc_fmt = f"{proc:,}".replace(",", ".")
+        tot_fmt = f"{tot:,}".replace(",", ".")
+
+        fig.add_annotation(
+            xref="x",
+            yref="paper",
+            x=mes,
+            y=-0.30,
+            text=(
+                f"<span style='color:{COR_IMP};'><b>I:</b> {imp_fmt}</span><br>"
+                f"<span style='color:{COR_PROC};'><b>P:</b> {proc_fmt}</span><br>"
+                f"<b>T:</b> {tot_fmt}"
+            ),
+            showarrow=False,
+            align="center",
+            font=dict(size=10, color="#0b2b45", family="Arial"),
+        )
+
+    return fig, tab
 
 # ======================================================
 # TABELA NO FINAL
 # ======================================================
 st.markdown('<div class="card"><div class="card-title">TABELA — VALORES MENSAIS</div>', unsafe_allow_html=True)
-
-if tabela_mensal is not None and not tabela_mensal.empty:
+if tabela_mensal is not None:
     st.dataframe(tabela_mensal, use_container_width=True, hide_index=True)
 else:
     st.info("Sem tabela mensal para exibir.")
-
 st.markdown("</div>", unsafe_allow_html=True)
 
 def gerar_pdf(df_tabela, ano_ref, uf_sel):
