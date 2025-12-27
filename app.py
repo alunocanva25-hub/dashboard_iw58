@@ -342,16 +342,13 @@ def acumulado_mensal_fig_e_tabela(df_base, col_data):
     if base.empty:
         return None, None
 
-    # Mês
     base["MES_NUM"] = base[col_data].dt.month
     base["MÊS"] = base["MES_NUM"].map(MESES_PT)
 
-    # Classe
     base["_CLASSE_"] = "OUTROS"
     base.loc[base["_RES_"].str.contains("PROCED", na=False), "_CLASSE_"] = "PROCEDENTE"
     base.loc[base["_RES_"].str.contains("IMPROCED", na=False), "_CLASSE_"] = "IMPROCEDENTE"
 
-    # Agregado
     dados = (
         base.groupby(["MES_NUM", "MÊS", "_CLASSE_"])
         .size()
@@ -359,18 +356,15 @@ def acumulado_mensal_fig_e_tabela(df_base, col_data):
         .sort_values("MES_NUM")
     )
 
-    # % por mês
     total_mes = dados.groupby("MES_NUM")["QTD"].transform("sum")
     dados["PCT"] = (dados["QTD"] / total_mes * 100).round(0)
 
-    # Labels de % só em Procedente/Improcedente
     dados["LABEL"] = ""
     mask_proc = dados["_CLASSE_"] == "PROCEDENTE"
     mask_imp  = dados["_CLASSE_"] == "IMPROCEDENTE"
     dados.loc[mask_proc, "LABEL"] = dados.loc[mask_proc, "PCT"].astype(int).astype(str) + "%"
     dados.loc[mask_imp,  "LABEL"] = dados.loc[mask_imp,  "PCT"].astype(int).astype(str) + "%"
 
-    # Pivot para tabela e para os textos abaixo do mês
     tab_pivot = (
         dados.pivot_table(index=["MES_NUM", "MÊS"], columns="_CLASSE_", values="QTD", fill_value=0)
         .reset_index()
@@ -382,15 +376,12 @@ def acumulado_mensal_fig_e_tabela(df_base, col_data):
     tab_pivot["TOTAL"] = tab_pivot["IMPROCEDENTE"] + tab_pivot["PROCEDENTE"] + tab_pivot["OUTROS"]
     tab_pivot = tab_pivot.sort_values("MES_NUM")
 
-    # Tabela final (para o dataframe)
     tabela = tab_pivot.drop(columns=["MES_NUM"]).copy()
     tabela = tabela[["MÊS", "IMPROCEDENTE", "PROCEDENTE", "TOTAL"]]
 
-    # TOTAL do gráfico (geral)
     total_geral = int(tab_pivot["TOTAL"].sum())
     total_geral_fmt = f"{total_geral:,}".replace(",", ".")
 
-    # ===== GRÁFICO =====
     fig = px.bar(
         dados,
         x="MÊS",
@@ -398,50 +389,36 @@ def acumulado_mensal_fig_e_tabela(df_base, col_data):
         color="_CLASSE_",
         barmode="stack",
         text="LABEL",
-        category_orders={
-            "MÊS": MESES_ORDEM,
-            "_CLASSE_": ["PROCEDENTE", "IMPROCEDENTE", "OUTROS"]
-        },
+        category_orders={"MÊS": MESES_ORDEM, "_CLASSE_": ["PROCEDENTE", "IMPROCEDENTE", "OUTROS"]},
         template="plotly_white",
-        color_discrete_map={
-            "PROCEDENTE": COR_PROC,
-            "IMPROCEDENTE": COR_IMP,
-            "OUTROS": COR_OUT
-        }
+        color_discrete_map={"PROCEDENTE": COR_PROC, "IMPROCEDENTE": COR_IMP, "OUTROS": COR_OUT},
     )
 
-    # Layout: espaço embaixo p/ textos e à direita p/ TOTAL do gráfico
+    # ✅ margens grandes para NÃO cortar o que está fora do plot
     fig.update_layout(
-        height=360,
-        margin=dict(l=10, r=150, t=70, b=110),
+        height=380,
+        margin=dict(l=10, r=180, t=70, b=160),
         legend_title_text="",
     )
-
-    # Texto % nas barras
     fig.update_traces(textposition="outside", cliponaxis=False)
-
-    # Eixos
-    fig.update_xaxes(title_text="")
+    fig.update_xaxes(title_text="", tickfont=dict(size=11))
     fig.update_yaxes(title_text="")
 
-    # TOTAL do gráfico (canto direito)
+    # ✅ TOTAL (dentro da área, sem cortar)
     fig.add_annotation(
-        xref="paper",
-        yref="paper",
-        x=1.12,          # joga pra fora do plot (direita)
-        y=0.65,
+        xref="paper", yref="paper",
+        x=1.02, y=0.55,
         text=f"<b>TOTAL</b><br>{total_geral_fmt}",
         showarrow=False,
         align="center",
         font=dict(size=16, color="#fcba03", family="Arial Black"),
         bgcolor="rgba(0,0,0,0.35)",
-        bordercolor="rgba(252,186,3,0.6)",
+        bordercolor="rgba(252,186,3,0.65)",
         borderwidth=1,
-        borderpad=8,
+        borderpad=10,
     )
 
-    # ===== Textos abaixo de cada mês: P / I / T =====
-    # coloca 1 annotation por mês (com quebra de linha)
+    # ✅ Texto abaixo de cada mês: P / I / T
     for _, r in tab_pivot.iterrows():
         mes = r["MÊS"]
         p = int(r["PROCEDENTE"])
@@ -453,11 +430,8 @@ def acumulado_mensal_fig_e_tabela(df_base, col_data):
         t_fmt = f"{t:,}".replace(",", ".")
 
         fig.add_annotation(
-            x=mes,
-            y=0,
-            xref="x",
-            yref="paper",
-            y=-0.28,  # abaixo do eixo X
+            x=mes, xref="x",
+            yref="paper", y=-0.42,   # <- desce bem para aparecer
             text=f"P:{p_fmt}<br>I:{i_fmt}<br><b>T:{t_fmt}</b>",
             showarrow=False,
             align="center",
@@ -486,7 +460,6 @@ def resumo_por_localidade_html(df_base, col_local, selecionado, top_n=12):
         qtd_fmt = f"{qtd:,}".replace(",", ".")
         linhas.append(f'<div class="{cls}"><span>{loc}</span><span>{qtd_fmt}</span></div>')
     return "\n".join(linhas)
-
 # ======================================================
 # BOTÃO ATUALIZAR BASE
 # ======================================================
