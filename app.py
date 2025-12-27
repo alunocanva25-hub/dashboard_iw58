@@ -13,6 +13,7 @@ import streamlit.components.v1 as components
 # CONFIG
 # ======================================================
 st.set_page_config(page_title="Dashboard Notas – AM x AS", layout="wide")
+st.caption("✅ build: 2025-12-27 v1")  # <-- confirma que o Cloud atualizou
 
 # ======================================================
 # CSS (visual do dashboard + organização)
@@ -258,7 +259,7 @@ def _titulo_plotly(fig, titulo: str, uf: str):
     uf_txt = uf if uf != "TOTAL" else "TODOS"
     fig.update_layout(
         title=f"{titulo} • {uf_txt}",
-        title_x=0.3,
+        title_x=0.5,
         title_font=dict(size=14, color="#FFFFFF", family="Arial Black")
     )
     return fig
@@ -281,14 +282,7 @@ def barh_contagem(df_base, col_dim, titulo, uf):
     if col_dim is None or df_base.empty:
         return None
 
-    dados = (
-        df_base
-        .groupby(col_dim)
-        .size()
-        .reset_index(name="QTD")
-        .sort_values("QTD")
-    )
-
+    dados = df_base.groupby(col_dim).size().reset_index(name="QTD").sort_values("QTD")
     if dados.empty:
         return None
 
@@ -308,17 +302,11 @@ def barh_contagem(df_base, col_dim, titulo, uf):
         height=300,
         margin=dict(l=10, r=10, t=70, b=10),
         showlegend=False,
-        xaxis=dict(visible=False)  # 🔥 FORÇA ocultar eixo X
+        xaxis=dict(visible=False)
     )
-
-    fig.update_traces(
-        textposition="outside",
-        cliponaxis=False
-    )
-
+    fig.update_traces(textposition="outside", cliponaxis=False)
     fig.update_yaxes(title_text="")
 
-    # ✅ TOTAL DO GRÁFICO (único)
     fig.add_annotation(
         xref="paper",
         yref="paper",
@@ -326,14 +314,9 @@ def barh_contagem(df_base, col_dim, titulo, uf):
         y=1.12,
         text=f"TOTAL: {total_fmt}",
         showarrow=False,
-        font=dict(
-            size=13,
-            color="#fcba03",
-            family="Arial Black"
-        ),
+        font=dict(size=13, color="#fcba03", family="Arial Black"),
         align="right"
     )
-
     return _titulo_plotly(fig, titulo, uf)
 
 def acumulado_mensal_fig_e_tabela(df_base, col_data):
@@ -539,25 +522,36 @@ with row2[2]:
     st.markdown("</div>", unsafe_allow_html=True)
 
 # ======================================================
-# ACUMULADO MENSAL
+# ACUMULADO MENSAL (com proteção contra NameError)
 # ======================================================
 st.markdown('<div class="card"><div class="card-title">ACUMULADO MENSAL DE NOTAS AM – AS</div>', unsafe_allow_html=True)
-fig_mensal, tabela_mensal = acumulado_mensal_fig_e_tabela(df_filtro, COL_DATA)
+
+fig_mensal = None
+tabela_mensal = None
+
+try:
+    fig_mensal, tabela_mensal = acumulado_mensal_fig_e_tabela(df_filtro, COL_DATA)
+except Exception as e:
+    st.error(f"Erro ao gerar acumulado mensal: {e}")
+
 if fig_mensal is not None:
     fig_mensal = _titulo_plotly(fig_mensal, "ACUMULADO MENSAL DE NOTAS AM – AS", uf_sel)
     st.plotly_chart(fig_mensal, use_container_width=True)
 else:
     st.info("Sem dados mensais (DATA vazia/ inválida).")
+
 st.markdown("</div>", unsafe_allow_html=True)
 
 # ======================================================
 # TABELA NO FINAL
 # ======================================================
 st.markdown('<div class="card"><div class="card-title">TABELA — VALORES MENSAIS</div>', unsafe_allow_html=True)
-if tabela_mensal is not None:
+
+if tabela_mensal is not None and not tabela_mensal.empty:
     st.dataframe(tabela_mensal, use_container_width=True, hide_index=True)
 else:
     st.info("Sem tabela mensal para exibir.")
+
 st.markdown("</div>", unsafe_allow_html=True)
 
 def gerar_pdf(df_tabela, ano_ref, uf_sel):
@@ -610,7 +604,7 @@ st.download_button(
 )
 
 # ======================================================
-# EXPORTAR DASHBOARD (PRINT PARA PDF) - OPÇÃO A
+# EXPORTAR DASHBOARD (PRINT PARA PDF)
 # ======================================================
 st.markdown("""
 <style>
