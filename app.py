@@ -9,6 +9,7 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from reportlab.lib import colors
 import streamlit.components.v1 as components
 
+st.error("RODANDO ESTE ARQUIVO AGORA ✅ build=TESTE-647-A")
 # ======================================================
 # CONFIG
 # ======================================================
