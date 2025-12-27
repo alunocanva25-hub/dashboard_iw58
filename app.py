@@ -16,7 +16,6 @@ st.set_page_config(page_title="Dashboard Notas – AM x AS", layout="wide")
 
 # ======================================================
 # CSS (visual do dashboard + organização)
-# + ALTERAÇÃO: estilo do segmented (aba ativa) e lista por localidade
 # ======================================================
 st.markdown("""
 <style>
@@ -254,6 +253,14 @@ def carregar_base(url_original: str) -> pd.DataFrame:
     df.columns = df.columns.str.upper().str.strip()
     return df
 
+def _titulo_plotly(fig, titulo: str):
+    fig.update_layout(
+        title=titulo,
+        title_x=0.5,
+        title_font=dict(size=14, color="#0b2b45", family="Arial Black")
+    )
+    return fig
+
 def donut_resultado(df_base, titulo):
     proc = df_base["_RES_"].str.contains("PROCED", na=False).sum()
     imp  = df_base["_RES_"].str.contains("IMPROCED", na=False).sum()
@@ -266,13 +273,12 @@ def donut_resultado(df_base, titulo):
         color_discrete_map={"Procedente": COR_PROC, "Improcedente": COR_IMP}
     )
     fig.update_layout(
-        title=titulo,
         height=260,
-        margin=dict(l=10, r=10, t=45, b=10),
+        margin=dict(l=10, r=10, t=60, b=10),
         legend_title_text=""
     )
     fig.update_traces(textinfo="percent+value")
-    return fig
+    return _titulo_plotly(fig, titulo)
 
 def barh_contagem(df_base, col_dim, titulo):
     if col_dim is None or df_base.empty:
@@ -282,13 +288,17 @@ def barh_contagem(df_base, col_dim, titulo):
         return None
     fig = px.bar(
         dados, x="QTD", y=col_dim, orientation="h", text="QTD",
-        title=titulo, template="plotly_white"
+        template="plotly_white"
     )
-    fig.update_layout(height=300, margin=dict(l=10, r=10, t=45, b=10), showlegend=False)
+    fig.update_layout(
+        height=300,
+        margin=dict(l=10, r=10, t=70, b=10),
+        showlegend=False
+    )
     fig.update_traces(textposition="outside", cliponaxis=False)
     fig.update_xaxes(title_text="")
     fig.update_yaxes(title_text="")
-    return fig
+    return _titulo_plotly(fig, titulo)
 
 def acumulado_mensal_fig_e_tabela(df_base, col_data):
     base = df_base.dropna(subset=[col_data]).copy()
@@ -308,7 +318,6 @@ def acumulado_mensal_fig_e_tabela(df_base, col_data):
     total_mes = dados.groupby("MES_NUM")["QTD"].transform("sum")
     dados["PCT"] = (dados["QTD"] / total_mes * 100).round(0)
 
-    # % em PROCEDENTE e IMPROCEDENTE
     dados["LABEL"] = ""
     mask_proc = dados["_CLASSE_"] == "PROCEDENTE"
     mask_imp  = dados["_CLASSE_"] == "IMPROCEDENTE"
@@ -323,10 +332,12 @@ def acumulado_mensal_fig_e_tabela(df_base, col_data):
         template="plotly_white",
         color_discrete_map={"PROCEDENTE": COR_PROC, "IMPROCEDENTE": COR_IMP, "OUTROS": COR_OUT}
     )
-    fig.update_layout(height=320, margin=dict(l=10, r=10, t=40, b=10), legend_title_text="")
+    fig.update_layout(height=320, margin=dict(l=10, r=10, t=70, b=10), legend_title_text="")
     fig.update_traces(textposition="outside", cliponaxis=False)
     fig.update_xaxes(title_text="")
     fig.update_yaxes(title_text="")
+
+    fig = _titulo_plotly(fig, "ACUMULADO MENSAL DE NOTAS AM – AS")
 
     tab = dados.pivot_table(index=["MES_NUM", "MÊS"], columns="_CLASSE_", values="QTD", fill_value=0).reset_index()
     for c in ["IMPROCEDENTE", "PROCEDENTE", "OUTROS"]:
@@ -388,18 +399,16 @@ COL_MOTIVO    = achar_coluna(df, ["MOTIVO"])
 COL_REGIONAL  = achar_coluna(df, ["REGIONAL"])
 COL_DATA      = achar_coluna(df, ["DATA"])
 
-# Preparação
 df[COL_DATA] = pd.to_datetime(df[COL_DATA], errors="coerce", dayfirst=True)
 df["_TIPO_"] = df[COL_TIPO].astype(str).str.upper().str.strip()
 df["_RES_"]  = df[COL_RESULTADO].astype(str).str.upper().str.strip()
 
-# Ano referência (último ano encontrado)
 ano_ref = int(df[COL_DATA].dt.year.dropna().max()) if df[COL_DATA].notna().any() else None
 df_ano = df if ano_ref is None else df[df[COL_DATA].dt.year == ano_ref].copy()
 ano_txt = str(ano_ref) if ano_ref else "—"
 
 # ======================================================
-# "ABAS" UF  (ALTERAÇÃO: segmented_control com destaque do selecionado)
+# "ABAS" UF
 # ======================================================
 ufs = sorted(df[COL_ESTADO].dropna().astype(str).str.upper().unique().tolist())
 ufs = ["TOTAL"] + ufs
@@ -407,11 +416,7 @@ ufs = ["TOTAL"] + ufs
 if "uf_sel" not in st.session_state:
     st.session_state.uf_sel = "TOTAL"
 
-uf_sel = st.segmented_control(
-    label="",
-    options=ufs,
-    default=st.session_state.uf_sel
-)
+uf_sel = st.segmented_control(label="", options=ufs, default=st.session_state.uf_sel)
 st.session_state.uf_sel = uf_sel
 
 df_filtro = df_ano if uf_sel == "TOTAL" else df_ano[df_ano[COL_ESTADO].astype(str).str.upper() == uf_sel]
@@ -421,12 +426,9 @@ df_as = df_filtro[df_filtro["_TIPO_"].str.contains("AS", na=False)]
 
 # ======================================================
 # 6 BLOCOS (CARDS)
-#   Linha 1: KPI + Donut AM + Donut AS
-#   Linha 2: Regional AM + Motivos AM + Motivos AS
 # ======================================================
 row1 = st.columns([1.09, 1.15, 1.15], gap="large")
 
-# Card KPI + "Notas por localidade" (ALTERAÇÃO: lista abaixo do total)
 with row1[0]:
     total = len(df_filtro)
     am = len(df_am)
@@ -462,31 +464,28 @@ with row1[0]:
         unsafe_allow_html=True
     )
 
-# Donut AM
 with row1[1]:
     st.markdown('<div class="card"><div class="card-title">ACUMULADO ANUAL – AM</div>', unsafe_allow_html=True)
     if df_am.empty:
         st.info("Sem dados AM.")
     else:
-        st.plotly_chart(donut_resultado(df_am, " "), use_container_width=True)
+        st.plotly_chart(donut_resultado(df_am, "ACUMULADO ANUAL – AM"), use_container_width=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
-# Donut AS
 with row1[2]:
     st.markdown('<div class="card"><div class="card-title">ACUMULADO ANUAL – AS</div>', unsafe_allow_html=True)
     if df_as.empty:
         st.info("Sem dados AS.")
     else:
-        st.plotly_chart(donut_resultado(df_as, " "), use_container_width=True)
+        st.plotly_chart(donut_resultado(df_as, "ACUMULADO ANUAL – AS"), use_container_width=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
-# Linha 2 (3 cards)
 row2 = st.columns([1, 1.3, 1.3], gap="large")
 
 with row2[0]:
     st.markdown('<div class="card"><div class="card-title">IMPROCEDÊNCIAS POR REGIONAL – NOTA AM</div>', unsafe_allow_html=True)
     base_imp_am = df_am[df_am["_RES_"].str.contains("IMPROCED", na=False)]
-    fig = barh_contagem(base_imp_am, COL_REGIONAL, " ")
+    fig = barh_contagem(base_imp_am, COL_REGIONAL, "IMPROCEDÊNCIAS POR REGIONAL – NOTA AM")
     if fig is not None:
         st.plotly_chart(fig, use_container_width=True)
     else:
@@ -496,7 +495,7 @@ with row2[0]:
 with row2[1]:
     st.markdown('<div class="card"><div class="card-title">MOTIVOS DE IMPROCEDÊNCIAS – NOTA AM</div>', unsafe_allow_html=True)
     base_imp_am = df_am[df_am["_RES_"].str.contains("IMPROCED", na=False)]
-    fig = barh_contagem(base_imp_am, COL_MOTIVO, " ")
+    fig = barh_contagem(base_imp_am, COL_MOTIVO, "MOTIVOS DE IMPROCEDÊNCIAS – NOTA AM")
     if fig is not None:
         st.plotly_chart(fig, use_container_width=True)
     else:
@@ -504,9 +503,9 @@ with row2[1]:
     st.markdown("</div>", unsafe_allow_html=True)
 
 with row2[2]:
-    st.markdown('<div class="card"><div class="card-title">MOTIVOS DE IMPROCEDÊNCIAS – NOTAS AS</div>', unsafe_allow_html=True)
+    st.markdown('<div class="card"><div class="card-title">MOTIVOS DE IMPROCEDÊNCIAS – NOTA AS</div>', unsafe_allow_html=True)
     base_imp_as = df_as[df_as["_RES_"].str.contains("IMPROCED", na=False)]
-    fig = barh_contagem(base_imp_as, COL_MOTIVO, " ")
+    fig = barh_contagem(base_imp_as, COL_MOTIVO, "MOTIVOS DE IMPROCEDÊNCIAS – NOTA AS")
     if fig is not None:
         st.plotly_chart(fig, use_container_width=True)
     else:
@@ -514,7 +513,7 @@ with row2[2]:
     st.markdown("</div>", unsafe_allow_html=True)
 
 # ======================================================
-# ACUMULADO MENSAL (gráfico) — fora dos 6 cards
+# ACUMULADO MENSAL
 # ======================================================
 st.markdown('<div class="card"><div class="card-title">ACUMULADO MENSAL DE NOTAS AM – AS</div>', unsafe_allow_html=True)
 fig_mensal, tabela_mensal = acumulado_mensal_fig_e_tabela(df_filtro, COL_DATA)
@@ -536,16 +535,7 @@ st.markdown("</div>", unsafe_allow_html=True)
 
 def gerar_pdf(df_tabela, ano_ref, uf_sel):
     buffer = BytesIO()
-
-    doc = SimpleDocTemplate(
-        buffer,
-        pagesize=A4,
-        rightMargin=36,
-        leftMargin=36,
-        topMargin=36,
-        bottomMargin=36
-    )
-
+    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
     styles = getSampleStyleSheet()
     elementos = []
 
@@ -567,7 +557,6 @@ def gerar_pdf(df_tabela, ano_ref, uf_sel):
 
     if df_tabela is not None and not df_tabela.empty:
         data = [df_tabela.columns.tolist()] + df_tabela.values.tolist()
-
         tabela = Table(data, repeatRows=1)
         tabela.setStyle(TableStyle([
             ("BACKGROUND", (0,0), (-1,0), colors.lightgrey),
@@ -577,7 +566,6 @@ def gerar_pdf(df_tabela, ano_ref, uf_sel):
             ("BOTTOMPADDING", (0,0), (-1,0), 8),
             ("TOPPADDING", (0,0), (-1,0), 8),
         ]))
-
         elementos.append(Paragraph("<b>Resumo Mensal</b>", styles["Heading2"]))
         elementos.append(Spacer(1, 8))
         elementos.append(tabela)
@@ -589,11 +577,7 @@ def gerar_pdf(df_tabela, ano_ref, uf_sel):
 # ======================================================
 # EXPORTAÇÃO (PDF)
 # ======================================================
-pdf_buffer = gerar_pdf(
-    df_tabela=tabela_mensal,
-    ano_ref=ano_txt,
-    uf_sel=uf_sel
-)
+pdf_buffer = gerar_pdf(df_tabela=tabela_mensal, ano_ref=ano_txt, uf_sel=uf_sel)
 
 st.download_button(
     label="📄 Exportar PDF",
@@ -608,26 +592,20 @@ st.download_button(
 st.markdown("""
 <style>
 @media print {
-  /* remove cabeçalho/rodapé do Streamlit e sidebar */
   header, footer, [data-testid="stSidebar"], [data-testid="stToolbar"] { display: none !important; }
-  /* remove os botões de exportação na impressão */
   .no-print { display: none !important; }
-  /* melhora preenchimento ao imprimir */
   .block-container { max-width: 100% !important; padding: 0 !important; }
 }
 </style>
 """, unsafe_allow_html=True)
 
-# Botão visível (mas escondido no print via class no-print)
 st.markdown('<div class="no-print">', unsafe_allow_html=True)
 st.button("🖨️ Exportar dashboard (print em PDF)")
 st.markdown('</div>', unsafe_allow_html=True)
 
-# Script que vincula o clique do botão ao window.print()
 components.html(
     """
     <script>
-      // procura o botão pelo texto e liga o evento uma vez
       const btns = window.parent.document.querySelectorAll('button');
       const target = Array.from(btns).find(b => b.innerText.trim() === '🖨️ Exportar dashboard (print em PDF)');
       if (target && !target.dataset.printBound) {
