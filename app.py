@@ -258,8 +258,8 @@ def _titulo_plotly(fig, titulo: str, uf: str):
     uf_txt = uf if uf != "TOTAL" else "TODOS"
     fig.update_layout(
         title=f"{titulo} • {uf_txt}",
-        title_x=0.5,
-        title_font=dict(size=14, color="#083358", family="Arial Black")
+        title_x=0.3,
+        title_font=dict(size=14, color="#FFFFFF", family="Arial Black")
     )
     return fig
 
