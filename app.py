@@ -422,7 +422,7 @@ def acumulado_mensal_fig_e_tabela(df_base, col_data):
         margin=dict(
             l=140,                        # ⬅️ espaço para o bloco à esquerda
             r=40,
-            t=70,
+            t=50,
             b=80
         ),
         xaxis_title="",
