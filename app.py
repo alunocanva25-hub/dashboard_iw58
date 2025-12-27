@@ -406,7 +406,7 @@ df_as = df_filtro[df_filtro["_TIPO_"].str.contains("AS", na=False)]
 # ======================================================
 # 6 BLOCOS (CARDS)
 # ======================================================
-row1 = st.columns([1.09, 2, 2], gap="large")
+row1 = st.columns([1.09, 1.15, 1.15], gap="large")
 
 with row1[0]:
     total = len(df_filtro); am = len(df_am); az = len(df_as)
