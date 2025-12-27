@@ -344,6 +344,7 @@ def acumulado_mensal_fig_e_tabela(df_base, col_data):
     base["MES_NUM"] = base[col_data].dt.month
     base["MÊS"] = base["MES_NUM"].map(MESES_PT)
 
+    # classes (mantém somente PROCEDENTE/IMPROCEDENTE no gráfico final)
     base["_CLASSE_"] = "OUTROS"
     base.loc[base["_RES_"].str.contains("PROCED", na=False), "_CLASSE_"] = "PROCEDENTE"
     base.loc[base["_RES_"].str.contains("IMPROCED", na=False), "_CLASSE_"] = "IMPROCEDENTE"
@@ -355,15 +356,17 @@ def acumulado_mensal_fig_e_tabela(df_base, col_data):
         .sort_values("MES_NUM")
     )
 
+    # % por mês (para rótulos dentro/fora das barras)
     total_mes = dados.groupby("MES_NUM")["QTD"].transform("sum")
     dados["PCT"] = (dados["QTD"] / total_mes * 100).round(0)
 
     dados["LABEL"] = ""
     mask_proc = dados["_CLASSE_"] == "PROCEDENTE"
-    mask_imp  = dados["_CLASSE_"] == "IMPROCEDENTE"
+    mask_imp = dados["_CLASSE_"] == "IMPROCEDENTE"
     dados.loc[mask_proc, "LABEL"] = dados.loc[mask_proc, "PCT"].astype(int).astype(str) + "%"
-    dados.loc[mask_imp,  "LABEL"] = dados.loc[mask_imp,  "PCT"].astype(int).astype(str) + "%"
+    dados.loc[mask_imp, "LABEL"] = dados.loc[mask_imp, "PCT"].astype(int).astype(str) + "%"
 
+    # Pivot para P/I/T por mês (usado na tabela e nos textos abaixo do eixo)
     tab_pivot = (
         dados.pivot_table(index=["MES_NUM", "MÊS"], columns="_CLASSE_", values="QTD", fill_value=0)
         .reset_index()
@@ -381,6 +384,7 @@ def acumulado_mensal_fig_e_tabela(df_base, col_data):
     total_geral = int(tab_pivot["TOTAL"].sum())
     total_geral_fmt = f"{total_geral:,}".replace(",", ".")
 
+    # ===== GRÁFICO =====
     fig = px.bar(
         dados,
         x="MÊS",
@@ -389,35 +393,43 @@ def acumulado_mensal_fig_e_tabela(df_base, col_data):
         barmode="stack",
         text="LABEL",
         category_orders={"MÊS": MESES_ORDEM, "_CLASSE_": ["PROCEDENTE", "IMPROCEDENTE", "OUTROS"]},
-        template="plotly_white",
+        template="plotly_dark",  # combina com o tema escuro que você está usando
         color_discrete_map={"PROCEDENTE": COR_PROC, "IMPROCEDENTE": COR_IMP, "OUTROS": COR_OUT},
     )
 
-    # ✅ margens grandes para NÃO cortar o que está fora do plot
+    # margens bem grandes para NÃO cortar:
+    # - caixa TOTAL à direita
+    # - 3 linhas P/I/T abaixo de cada mês
     fig.update_layout(
-        height=460,
-        margin=dict(l=10, r=220, t=70, b=220),
+        height=420,
+        margin=dict(l=10, r=220, t=80, b=230),
         legend_title_text="",
     )
     fig.update_traces(textposition="outside", cliponaxis=False)
-    fig.update_xaxes(title_text="", tickfont=dict(size=11))
+
+    # eixo X: mantém meses, mas dá mais espaço embaixo
+    fig.update_xaxes(title_text="", tickfont=dict(size=11), tickangle=0)
+
+    # eixo Y: mantém escala (se você quiser ocultar, troque visible=False)
     fig.update_yaxes(title_text="")
 
-    # ✅ TOTAL (dentro da área, sem cortar)
+    # ===== Caixa TOTAL (direita do gráfico) =====
     fig.add_annotation(
-        xref="paper", yref="paper",
-        x=0.99, y=0.62,
+        xref="paper",
+        yref="paper",
+        x=1.10,
+        y=0.55,
         text=f"<b>TOTAL</b><br>{total_geral_fmt}",
         showarrow=False,
         align="center",
         font=dict(size=16, color="#fcba03", family="Arial Black"),
-        bgcolor="rgba(0,0,0,0.35)",
-        bordercolor="rgba(252,186,3,0.65)",
+        bgcolor="rgba(0,0,0,0.45)",
+        bordercolor="rgba(252,186,3,0.80)",
         borderwidth=1,
         borderpad=10,
     )
 
-    # ✅ Texto abaixo de cada mês: P / I / T
+    # ===== Texto abaixo de cada mês: P / I / T =====
     for _, r in tab_pivot.iterrows():
         mes = r["MÊS"]
         p = int(r["PROCEDENTE"])
@@ -429,13 +441,17 @@ def acumulado_mensal_fig_e_tabela(df_base, col_data):
         t_fmt = f"{t:,}".replace(",", ".")
 
         fig.add_annotation(
-            x=mes, xref="x",
-            yref="paper", y=-0.33,   # <- abaixo do eixo
+            x=mes,
+            xref="x",
+            xanchor="center",
+            yref="paper",
+            y=-0.55,  # desce mais para aparecer com folga
             text=f"P:{p_fmt}<br>I:{i_fmt}<br><b>T:{t_fmt}</b>",
             showarrow=False,
             align="center",
-            font=dict(size=11, color="#0b2b45", family="Arial Black"),
+            font=dict(size=11, color="#ffffff", family="Arial Black"),
         )
+
     return fig, tabela
 
 def resumo_por_localidade_html(df_base, col_local, selecionado, top_n=12):
