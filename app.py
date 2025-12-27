@@ -625,6 +625,7 @@ def acumulado_mensal_fig_e_tabela(df_base, col_data):
     tab_final = tab[["MÊS", "IMPROCEDENTE", "PROCEDENTE", "TOTAL"]]
 
     return fig, tab_final
+      )
 
 # ======================================================
 # TABELA NO FINAL
