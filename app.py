@@ -253,18 +253,18 @@ def carregar_base(url_original: str) -> pd.DataFrame:
     df.columns = df.columns.str.upper().str.strip()
     return df
 
-def _titulo_plotly(fig, titulo: str):
+def _titulo_plotly(fig, titulo: str, uf: str):
+    uf_txt = uf if uf != "TOTAL" else "TODOS"
     fig.update_layout(
-        title=titulo,
+        title=f"{titulo} • {uf_txt}",
         title_x=0.5,
         title_font=dict(size=14, color="#0b2b45", family="Arial Black")
     )
     return fig
 
-def donut_resultado(df_base, titulo):
+def donut_resultado(df_base):
     proc = df_base["_RES_"].str.contains("PROCED", na=False).sum()
     imp  = df_base["_RES_"].str.contains("IMPROCED", na=False).sum()
-
     dados = pd.DataFrame({"Resultado": ["Procedente", "Improcedente"], "QTD": [proc, imp]})
     fig = px.pie(
         dados, names="Resultado", values="QTD", hole=0.62,
@@ -272,33 +272,22 @@ def donut_resultado(df_base, titulo):
         color="Resultado",
         color_discrete_map={"Procedente": COR_PROC, "Improcedente": COR_IMP}
     )
-    fig.update_layout(
-        height=260,
-        margin=dict(l=10, r=10, t=60, b=10),
-        legend_title_text=""
-    )
+    fig.update_layout(height=260, margin=dict(l=10, r=10, t=60, b=10), legend_title_text="")
     fig.update_traces(textinfo="percent+value")
-    return _titulo_plotly(fig, titulo)
+    return fig
 
-def barh_contagem(df_base, col_dim, titulo):
+def barh_contagem(df_base, col_dim, titulo, uf):
     if col_dim is None or df_base.empty:
         return None
     dados = df_base.groupby(col_dim).size().reset_index(name="QTD").sort_values("QTD")
     if dados.empty:
         return None
-    fig = px.bar(
-        dados, x="QTD", y=col_dim, orientation="h", text="QTD",
-        template="plotly_white"
-    )
-    fig.update_layout(
-        height=300,
-        margin=dict(l=10, r=10, t=70, b=10),
-        showlegend=False
-    )
+    fig = px.bar(dados, x="QTD", y=col_dim, orientation="h", text="QTD", template="plotly_white")
+    fig.update_layout(height=300, margin=dict(l=10, r=10, t=70, b=10), showlegend=False)
     fig.update_traces(textposition="outside", cliponaxis=False)
     fig.update_xaxes(title_text="")
     fig.update_yaxes(title_text="")
-    return _titulo_plotly(fig, titulo)
+    return _titulo_plotly(fig, titulo, uf)
 
 def acumulado_mensal_fig_e_tabela(df_base, col_data):
     base = df_base.dropna(subset=[col_data]).copy()
@@ -312,8 +301,7 @@ def acumulado_mensal_fig_e_tabela(df_base, col_data):
     base.loc[base["_RES_"].str.contains("PROCED", na=False), "_CLASSE_"] = "PROCEDENTE"
     base.loc[base["_RES_"].str.contains("IMPROCED", na=False), "_CLASSE_"] = "IMPROCEDENTE"
 
-    dados = base.groupby(["MES_NUM", "MÊS", "_CLASSE_"]).size().reset_index(name="QTD")
-    dados = dados.sort_values("MES_NUM")
+    dados = base.groupby(["MES_NUM", "MÊS", "_CLASSE_"]).size().reset_index(name="QTD").sort_values("MES_NUM")
 
     total_mes = dados.groupby("MES_NUM")["QTD"].transform("sum")
     dados["PCT"] = (dados["QTD"] / total_mes * 100).round(0)
@@ -337,8 +325,6 @@ def acumulado_mensal_fig_e_tabela(df_base, col_data):
     fig.update_xaxes(title_text="")
     fig.update_yaxes(title_text="")
 
-    fig = _titulo_plotly(fig, "ACUMULADO MENSAL DE NOTAS AM – AS")
-
     tab = dados.pivot_table(index=["MES_NUM", "MÊS"], columns="_CLASSE_", values="QTD", fill_value=0).reset_index()
     for c in ["IMPROCEDENTE", "PROCEDENTE", "OUTROS"]:
         if c not in tab.columns:
@@ -352,16 +338,13 @@ def acumulado_mensal_fig_e_tabela(df_base, col_data):
 def resumo_por_localidade_html(df_base, col_local, selecionado, top_n=12):
     if col_local is None or df_base.empty:
         return ""
-
     s = df_base[col_local].dropna().astype(str).str.upper()
     vc = s.value_counts().reset_index()
     vc.columns = ["LOCAL", "QTD"]
-
     if len(vc) > top_n:
         outros = int(vc.iloc[top_n:]["QTD"].sum())
         vc = vc.iloc[:top_n].copy()
         vc.loc[len(vc)] = ["OUTROS", outros]
-
     linhas = []
     sel = str(selecionado).upper()
     for _, r in vc.iterrows():
@@ -371,7 +354,6 @@ def resumo_por_localidade_html(df_base, col_local, selecionado, top_n=12):
         cls = "loc-row active" if active else "loc-row"
         qtd_fmt = f"{qtd:,}".replace(",", ".")
         linhas.append(f'<div class="{cls}"><span>{loc}</span><span>{qtd_fmt}</span></div>')
-
     return "\n".join(linhas)
 
 # ======================================================
@@ -412,15 +394,12 @@ ano_txt = str(ano_ref) if ano_ref else "—"
 # ======================================================
 ufs = sorted(df[COL_ESTADO].dropna().astype(str).str.upper().unique().tolist())
 ufs = ["TOTAL"] + ufs
-
 if "uf_sel" not in st.session_state:
     st.session_state.uf_sel = "TOTAL"
-
 uf_sel = st.segmented_control(label="", options=ufs, default=st.session_state.uf_sel)
 st.session_state.uf_sel = uf_sel
 
 df_filtro = df_ano if uf_sel == "TOTAL" else df_ano[df_ano[COL_ESTADO].astype(str).str.upper() == uf_sel]
-
 df_am = df_filtro[df_filtro["_TIPO_"].str.contains("AM", na=False)]
 df_as = df_filtro[df_filtro["_TIPO_"].str.contains("AS", na=False)]
 
@@ -430,14 +409,10 @@ df_as = df_filtro[df_filtro["_TIPO_"].str.contains("AS", na=False)]
 row1 = st.columns([1.09, 1.15, 1.15], gap="large")
 
 with row1[0]:
-    total = len(df_filtro)
-    am = len(df_am)
-    az = len(df_as)
-
+    total = len(df_filtro); am = len(df_am); az = len(df_as)
     total_fmt = f"{total:,}".replace(",", ".")
     am_fmt    = f"{am:,}".replace(",", ".")
     as_fmt    = f"{az:,}".replace(",", ".")
-
     st.markdown(
         f"""
         <div class="card">
@@ -469,7 +444,9 @@ with row1[1]:
     if df_am.empty:
         st.info("Sem dados AM.")
     else:
-        st.plotly_chart(donut_resultado(df_am, "ACUMULADO ANUAL – AM"), use_container_width=True)
+        fig = donut_resultado(df_am)
+        fig = _titulo_plotly(fig, "ACUMULADO ANUAL – AM", uf_sel)
+        st.plotly_chart(fig, use_container_width=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
 with row1[2]:
@@ -477,7 +454,9 @@ with row1[2]:
     if df_as.empty:
         st.info("Sem dados AS.")
     else:
-        st.plotly_chart(donut_resultado(df_as, "ACUMULADO ANUAL – AS"), use_container_width=True)
+        fig = donut_resultado(df_as)
+        fig = _titulo_plotly(fig, "ACUMULADO ANUAL – AS", uf_sel)
+        st.plotly_chart(fig, use_container_width=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
 row2 = st.columns([1, 1.3, 1.3], gap="large")
@@ -485,7 +464,7 @@ row2 = st.columns([1, 1.3, 1.3], gap="large")
 with row2[0]:
     st.markdown('<div class="card"><div class="card-title">IMPROCEDÊNCIAS POR REGIONAL – NOTA AM</div>', unsafe_allow_html=True)
     base_imp_am = df_am[df_am["_RES_"].str.contains("IMPROCED", na=False)]
-    fig = barh_contagem(base_imp_am, COL_REGIONAL, "IMPROCEDÊNCIAS POR REGIONAL – NOTA AM")
+    fig = barh_contagem(base_imp_am, COL_REGIONAL, "IMPROCEDÊNCIAS POR REGIONAL – NOTA AM", uf_sel)
     if fig is not None:
         st.plotly_chart(fig, use_container_width=True)
     else:
@@ -495,7 +474,7 @@ with row2[0]:
 with row2[1]:
     st.markdown('<div class="card"><div class="card-title">MOTIVOS DE IMPROCEDÊNCIAS – NOTA AM</div>', unsafe_allow_html=True)
     base_imp_am = df_am[df_am["_RES_"].str.contains("IMPROCED", na=False)]
-    fig = barh_contagem(base_imp_am, COL_MOTIVO, "MOTIVOS DE IMPROCEDÊNCIAS – NOTA AM")
+    fig = barh_contagem(base_imp_am, COL_MOTIVO, "MOTIVOS DE IMPROCEDÊNCIAS – NOTA AM", uf_sel)
     if fig is not None:
         st.plotly_chart(fig, use_container_width=True)
     else:
@@ -505,7 +484,7 @@ with row2[1]:
 with row2[2]:
     st.markdown('<div class="card"><div class="card-title">MOTIVOS DE IMPROCEDÊNCIAS – NOTA AS</div>', unsafe_allow_html=True)
     base_imp_as = df_as[df_as["_RES_"].str.contains("IMPROCED", na=False)]
-    fig = barh_contagem(base_imp_as, COL_MOTIVO, "MOTIVOS DE IMPROCEDÊNCIAS – NOTA AS")
+    fig = barh_contagem(base_imp_as, COL_MOTIVO, "MOTIVOS DE IMPROCEDÊNCIAS – NOTA AS", uf_sel)
     if fig is not None:
         st.plotly_chart(fig, use_container_width=True)
     else:
@@ -518,6 +497,7 @@ with row2[2]:
 st.markdown('<div class="card"><div class="card-title">ACUMULADO MENSAL DE NOTAS AM – AS</div>', unsafe_allow_html=True)
 fig_mensal, tabela_mensal = acumulado_mensal_fig_e_tabela(df_filtro, COL_DATA)
 if fig_mensal is not None:
+    fig_mensal = _titulo_plotly(fig_mensal, "ACUMULADO MENSAL DE NOTAS AM – AS", uf_sel)
     st.plotly_chart(fig_mensal, use_container_width=True)
 else:
     st.info("Sem dados mensais (DATA vazia/ inválida).")
@@ -538,16 +518,12 @@ def gerar_pdf(df_tabela, ano_ref, uf_sel):
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
     styles = getSampleStyleSheet()
     elementos = []
-
     elementos.append(Paragraph(f"<b>DASHBOARD NOTAS AM x AS – {ano_ref}</b>", styles["Title"]))
     elementos.append(Spacer(1, 12))
     elementos.append(Paragraph(f"<b>UF selecionada:</b> {uf_sel}", styles["Normal"]))
     elementos.append(Spacer(1, 12))
 
-    total = len(df_filtro)
-    am = len(df_am)
-    az = len(df_as)
-
+    total = len(df_filtro); am = len(df_am); az = len(df_as)
     elementos.append(Paragraph(
         f"<b>Total de Notas:</b> {total}<br/>"
         f"<b>AM:</b> {am} &nbsp;&nbsp; <b>AS:</b> {az}",
