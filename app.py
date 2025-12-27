@@ -343,6 +343,9 @@ def acumulado_mensal_fig_e_tabela(df_base, col_data):
     if base.empty:
         return None, None
 
+    # =========================
+    # Preparação dos dados
+    # =========================
     base["MES_NUM"] = base[col_data].dt.month
     base["MÊS"] = base["MES_NUM"].map(MESES_PT)
 
@@ -357,32 +360,41 @@ def acumulado_mensal_fig_e_tabela(df_base, col_data):
         .sort_values("MES_NUM")
     )
 
+    # =========================
+    # Percentuais (para labels nas barras)
+    # =========================
     total_mes = dados.groupby("MES_NUM")["QTD"].transform("sum")
     dados["PCT"] = (dados["QTD"] / total_mes * 100).round(0)
 
     dados["LABEL"] = ""
-    mask_proc = dados["_CLASSE_"] == "PROCEDENTE"
-    mask_imp  = dados["_CLASSE_"] == "IMPROCEDENTE"
-    dados.loc[mask_proc, "LABEL"] = dados.loc[mask_proc, "PCT"].astype(int).astype(str) + "%"
-    dados.loc[mask_imp,  "LABEL"] = dados.loc[mask_imp,  "PCT"].astype(int).astype(str) + "%"
+    dados.loc[dados["_CLASSE_"] == "PROCEDENTE", "LABEL"] = dados["PCT"].astype(int).astype(str) + "%"
+    dados.loc[dados["_CLASSE_"] == "IMPROCEDENTE", "LABEL"] = dados["PCT"].astype(int).astype(str) + "%"
 
-    tab_pivot = (
-        dados.pivot_table(index=["MES_NUM", "MÊS"], columns="_CLASSE_", values="QTD", fill_value=0)
+    # =========================
+    # Tabela base (usada para totais)
+    # =========================
+    tab = (
+        dados.pivot_table(
+            index=["MES_NUM", "MÊS"],
+            columns="_CLASSE_",
+            values="QTD",
+            fill_value=0
+        )
         .reset_index()
+        .sort_values("MES_NUM")
     )
-    for c in ["IMPROCEDENTE", "PROCEDENTE", "OUTROS"]:
-        if c not in tab_pivot.columns:
-            tab_pivot[c] = 0
 
-    tab_pivot["TOTAL"] = tab_pivot["IMPROCEDENTE"] + tab_pivot["PROCEDENTE"] + tab_pivot["OUTROS"]
-    tab_pivot = tab_pivot.sort_values("MES_NUM")
+    for c in ["PROCEDENTE", "IMPROCEDENTE", "OUTROS"]:
+        if c not in tab.columns:
+            tab[c] = 0
 
-    tabela = tab_pivot.drop(columns=["MES_NUM"]).copy()
-    tabela = tabela[["MÊS", "IMPROCEDENTE", "PROCEDENTE", "TOTAL"]]
+    tab["TOTAL"] = tab["PROCEDENTE"] + tab["IMPROCEDENTE"] + tab["OUTROS"]
 
-    total_geral = int(tab_pivot["TOTAL"].sum())
-    total_geral_fmt = f"{total_geral:,}".replace(",", ".")
+    tabela_final = tab[["MÊS", "IMPROCEDENTE", "PROCEDENTE", "TOTAL"]].copy()
 
+    # =========================
+    # Gráfico principal
+    # =========================
     fig = px.bar(
         dados,
         x="MÊS",
@@ -390,63 +402,66 @@ def acumulado_mensal_fig_e_tabela(df_base, col_data):
         color="_CLASSE_",
         barmode="stack",
         text="LABEL",
-        category_orders={"MÊS": MESES_ORDEM, "_CLASSE_": ["PROCEDENTE", "IMPROCEDENTE", "OUTROS"]},
-        template="plotly_white",
-        color_discrete_map={"PROCEDENTE": COR_PROC, "IMPROCEDENTE": COR_IMP, "OUTROS": COR_OUT},
+        category_orders={
+            "MÊS": MESES_ORDEM,
+            "_CLASSE_": ["PROCEDENTE", "IMPROCEDENTE", "OUTROS"]
+        },
+        color_discrete_map={
+            "PROCEDENTE": COR_PROC,
+            "IMPROCEDENTE": COR_IMP,
+            "OUTROS": COR_OUT
+        },
+        template="plotly_dark"
     )
 
-    # ✅ margens grandes para NÃO cortar o que está fora do plot
-    fig.update_layout(
-        height=460,
-        margin=dict(l=10, r=220, t=70, b=220),
-        legend_title_text="",
-    )
     fig.update_traces(textposition="outside", cliponaxis=False)
-    fig.update_xaxes(title_text="", tickfont=dict(size=11))
-    fig.update_yaxes(title_text="")
 
-    # ✅ TOTAL (dentro da área, sem cortar)
-    fig.add_annotation(
-        xref="paper", yref="paper",
-        x=1.18, y=0.86,
-        text=f"<b>TOTAL</b><br>{total_geral_fmt}",
-        showarrow=False,
-        align="center",
-        font=dict(size=16, color="#fcba03", family="Arial Black"),
-        bgcolor="rgba(0,0,0,0.35)",
-        bordercolor="rgba(252,186,3,0.65)",
-        borderwidth=1,
-        borderpad=10,
+    fig.update_layout(
+        height=420,
+        showlegend=False,                 # ❌ remove legenda inferior
+        margin=dict(
+            l=140,                        # ⬅️ espaço para o bloco à esquerda
+            r=40,
+            t=70,
+            b=80
+        ),
+        xaxis_title="",
+        yaxis_title=""
     )
 
-    # ✅ Texto abaixo de cada mês: P / I / T
-    for _, r in tab_pivot.iterrows():
-        mes = r["MÊS"]
-        p = int(r["PROCEDENTE"])
-        i = int(r["IMPROCEDENTE"])
-        t = int(r["TOTAL"])
+    # =====================================================
+    # 🔢 BLOCO RESUMO (tipo tabela) À ESQUERDA DO GRÁFICO
+    # =====================================================
 
-        p_fmt = f"{p:,}".replace(",", ".")
-        i_fmt = f"{i:,}".replace(",", ".")
-        t_fmt = f"{t:,}".replace(",", ".")
+    # 🔧 CONTROLES DE POSIÇÃO (AJUSTE AQUI 👇)
+    x_pos = -0.14        # ➡️ (-) mais esquerda | (+) mais direita
+    y_inicio = 0.80      # ⬆️ aumenta sobe | ⬇️ diminui desce
+    espacamento = 0.08   # distância entre linhas
+
+    resumo = [
+        ("#2e7d32", int(tab["PROCEDENTE"].sum())),    # Procedente (verde)
+        ("#c62828", int(tab["IMPROCEDENTE"].sum())),  # Improcedente (vermelho)
+        ("#fcba03", int(tab["TOTAL"].sum())),         # Total (amarelo)
+    ]
+
+    for i, (cor, valor) in enumerate(resumo):
+        y = y_inicio - (i * espacamento)
+        valor_fmt = f"{valor:,}".replace(",", ".")
 
         fig.add_annotation(
-            x=mes, xref="x",
-            yref="paper", y=-0.42,   # abaixo do eixo (bloco tipo tabela)
+            xref="paper",
+            yref="paper",
+            x=x_pos,
+            y=y,
             text=(
-                f"<table style='margin:auto;border-collapse:collapse;'>"
-                f"<tr><td style='color:{COR_PROC};font-size:14px;padding-right:6px;'>■</td>"
-                f"<td style='color:#0b2b45;font-family:Arial Black;font-size:12px;text-align:right;'>{p_fmt}</td></tr>"
-                f"<tr><td style='color:{COR_IMP};font-size:14px;padding-right:6px;'>■</td>"
-                f"<td style='color:#0b2b45;font-family:Arial Black;font-size:12px;text-align:right;'>{i_fmt}</td></tr>"
-                f"<tr><td style='color:#fcba03;font-size:14px;padding-right:6px;'>■</td>"
-                f"<td style='color:#0b2b45;font-family:Arial Black;font-size:12px;text-align:right;'>{t_fmt}</td></tr>"
-                f"</table>"
+                f"<span style='color:{cor};font-size:20px'>■</span> "
+                f"<span style='color:white;font-size:15px'><b>{valor_fmt}</b></span>"
             ),
             showarrow=False,
-            align="center",
+            align="left"
         )
-    return fig, tabela
+
+    return fig, tabela_final
 
 def resumo_por_localidade_html(df_base, col_local, selecionado, top_n=12):
     if col_local is None or df_base.empty:
