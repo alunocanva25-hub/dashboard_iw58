@@ -437,7 +437,7 @@ def acumulado_mensal_fig_e_tabela(df_base, col_data):
             align="center",
             font=dict(size=11, color="#0b2b45", family="Arial Black"),
         )
-
+  st.warning("✅ FUNÇÃO ACUMULADO MENSAL ATUALIZADA (VERSÃO NOVA)")
     return fig, tabela
 
 def resumo_por_localidade_html(df_base, col_local, selecionado, top_n=12):
