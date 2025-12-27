@@ -324,7 +324,7 @@ def barh_contagem(df_base, col_dim, titulo, uf):
     fig.add_annotation(
         xref="paper",
         yref="paper",
-        x=1.18,
+        x=0.98,
         y=1.12,
         text=f"TOTAL: {total_fmt}",
         showarrow=False,
@@ -408,7 +408,7 @@ def acumulado_mensal_fig_e_tabela(df_base, col_data):
     # ✅ TOTAL (dentro da área, sem cortar)
     fig.add_annotation(
         xref="paper", yref="paper",
-        x=0.99, y=0.62,
+        x=1.18, y=0.86,
         text=f"<b>TOTAL</b><br>{total_geral_fmt}",
         showarrow=False,
         align="center",
@@ -432,8 +432,8 @@ def acumulado_mensal_fig_e_tabela(df_base, col_data):
 
         fig.add_annotation(
             x=mes, xref="x",
-            yref="paper", y=-0.33,   # <- abaixo do eixo
-            text=f"P:{p_fmt}<br>I:{i_fmt}<br><b>T:{t_fmt}</b>",
+            yref="paper", y=-0.40,   # <- abaixo do eixo
+            text=(f"<span style='color:{COR_PROC};'><b>PROCEDENTE:</b> {p_fmt}</span><br>"f"<span style='color:{COR_IMP};'><b>IMPROCEDENTE:</b> {i_fmt}</span><br>"f"<span style='color:#fcba03;'><b>TOTAL:</b> {t_fmt}</span>"),
             showarrow=False,
             align="center",
             font=dict(size=11, color="#0b2b45", family="Arial Black"),
