@@ -9,7 +9,6 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from reportlab.lib import colors
 import streamlit.components.v1 as components
 
-st.error("RODANDO ESTE ARQUIVO AGORA ✅ build=TESTE-647-A")
 # ======================================================
 # CONFIG
 # ======================================================
@@ -259,7 +258,7 @@ def _titulo_plotly(fig, titulo: str, uf: str):
     uf_txt = uf if uf != "TOTAL" else "TODOS"
     fig.update_layout(
         title=f"{titulo} • {uf_txt}",
-        title_x=0.3,
+        title_x=0.0,
         title_font=dict(size=14, color="#FFFFFF", family="Arial Black")
     )
     return fig
@@ -309,8 +308,10 @@ def barh_contagem(df_base, col_dim, titulo, uf):
         height=300,
         margin=dict(l=10, r=10, t=70, b=10),
         showlegend=False,
-        xaxis=dict(visible=False)  # 🔥 FORÇA ocultar eixo X
+        
     )
+    # 🔥 Oculta eixo X (escala) — mantém apenas os valores nas barras
+    fig.update_xaxes(visible=False, showticklabels=False, ticks="", showgrid=False, zeroline=False)
 
     fig.update_traces(
         textposition="outside",
@@ -342,6 +343,9 @@ def acumulado_mensal_fig_e_tabela(df_base, col_data):
     if base.empty:
         return None, None
 
+    # =========================
+    # Preparação dos dados
+    # =========================
     base["MES_NUM"] = base[col_data].dt.month
     base["MÊS"] = base["MES_NUM"].map(MESES_PT)
 
@@ -349,39 +353,186 @@ def acumulado_mensal_fig_e_tabela(df_base, col_data):
     base.loc[base["_RES_"].str.contains("PROCED", na=False), "_CLASSE_"] = "PROCEDENTE"
     base.loc[base["_RES_"].str.contains("IMPROCED", na=False), "_CLASSE_"] = "IMPROCEDENTE"
 
-    dados = base.groupby(["MES_NUM", "MÊS", "_CLASSE_"]).size().reset_index(name="QTD").sort_values("MES_NUM")
+    classes = ["PROCEDENTE", "IMPROCEDENTE", "OUTROS"]
 
+    # Contagem bruta
+    dados_raw = (
+        base.groupby(["MES_NUM", "MÊS", "_CLASSE_"])
+        .size()
+        .reset_index(name="QTD")
+    )
+
+    # Garante 12 meses + classes
+    meses_df = pd.DataFrame({"MES_NUM": list(range(1, 13))})
+    meses_df["MÊS"] = meses_df["MES_NUM"].map(MESES_PT)
+
+    grid = (
+        meses_df.assign(_k=1)
+        .merge(pd.DataFrame({"_CLASSE_": classes}).assign(_k=1), on="_k")
+        .drop(columns="_k")
+    )
+
+    dados = (
+        grid.merge(dados_raw, on=["MES_NUM", "MÊS", "_CLASSE_"], how="left")
+        .fillna({"QTD": 0})
+    )
+    dados["QTD"] = dados["QTD"].astype(int)
+
+    # =========================
+    # Percentuais (labels nas barras)
+    # =========================
     total_mes = dados.groupby("MES_NUM")["QTD"].transform("sum")
-    dados["PCT"] = (dados["QTD"] / total_mes * 100).round(0)
+    dados["PCT"] = ((dados["QTD"] / total_mes.replace(0, 1)) * 100).round(0).astype(int)
 
     dados["LABEL"] = ""
-    mask_proc = dados["_CLASSE_"] == "PROCEDENTE"
-    mask_imp  = dados["_CLASSE_"] == "IMPROCEDENTE"
-    dados.loc[mask_proc, "LABEL"] = dados.loc[mask_proc, "PCT"].astype(int).astype(str) + "%"
-    dados.loc[mask_imp,  "LABEL"] = dados.loc[mask_imp,  "PCT"].astype(int).astype(str) + "%"
+    dados.loc[dados["_CLASSE_"] == "PROCEDENTE", "LABEL"] = dados.loc[dados["_CLASSE_"] == "PROCEDENTE", "PCT"].astype(str) + "%"
+    dados.loc[dados["_CLASSE_"] == "IMPROCEDENTE", "LABEL"] = dados.loc[dados["_CLASSE_"] == "IMPROCEDENTE", "PCT"].astype(str) + "%"
 
-    fig = px.bar(
-        dados,
-        x="MÊS", y="QTD", color="_CLASSE_", barmode="stack",
-        text="LABEL",
-        category_orders={"MÊS": MESES_ORDEM, "_CLASSE_": ["PROCEDENTE", "IMPROCEDENTE", "OUTROS"]},
-        template="plotly_white",
-        color_discrete_map={"PROCEDENTE": COR_PROC, "IMPROCEDENTE": COR_IMP, "OUTROS": COR_OUT}
+    # =========================
+    # Tabela (valores por mês)
+    # =========================
+    tab = (
+        dados.pivot_table(index=["MES_NUM", "MÊS"], columns="_CLASSE_", values="QTD", aggfunc="sum", fill_value=0)
+        .reset_index()
+        .sort_values("MES_NUM")
     )
-    fig.update_layout(height=320, margin=dict(l=10, r=10, t=70, b=10), legend_title_text="")
-    fig.update_traces(textposition="outside", cliponaxis=False)
-    fig.update_xaxes(title_text="")
-    fig.update_yaxes(title_text="")
-
-    tab = dados.pivot_table(index=["MES_NUM", "MÊS"], columns="_CLASSE_", values="QTD", fill_value=0).reset_index()
-    for c in ["IMPROCEDENTE", "PROCEDENTE", "OUTROS"]:
+    for c in classes:
         if c not in tab.columns:
             tab[c] = 0
-    tab["TOTAL"] = tab["IMPROCEDENTE"] + tab["PROCEDENTE"] + tab["OUTROS"]
-    tab = tab.sort_values("MES_NUM").drop(columns=["MES_NUM"])
-    tab = tab[["MÊS", "IMPROCEDENTE", "PROCEDENTE", "TOTAL"]]
 
-    return fig, tab
+    tab["TOTAL"] = tab["PROCEDENTE"] + tab["IMPROCEDENTE"] + tab["OUTROS"]
+    tabela_final = tab[["MÊS", "IMPROCEDENTE", "PROCEDENTE", "TOTAL"]].copy()
+
+    # =========================
+    # Gráfico principal
+    # =========================
+    fig = px.bar(
+        dados.sort_values("MES_NUM"),
+        x="MÊS",
+        y="QTD",
+        color="_CLASSE_",
+        barmode="stack",
+        text="LABEL",
+        category_orders={
+            "MÊS": MESES_ORDEM,
+            "_CLASSE_": ["PROCEDENTE", "IMPROCEDENTE", "OUTROS"],
+        },
+        color_discrete_map={
+            "PROCEDENTE": COR_PROC,
+            "IMPROCEDENTE": COR_IMP,
+            "OUTROS": COR_OUT,
+        },
+        template="plotly_dark",
+    )
+
+    fig.update_traces(textposition="outside", cliponaxis=False)
+
+    # Remove eixo Y (lado esquerdo)
+    fig.update_yaxes(visible=False, showgrid=False, zeroline=False, showticklabels=False, title_text="")
+
+    # Remove legenda padrão do Plotly
+    fig.update_layout(
+        height=520,
+        showlegend=False,
+        margin=dict(l=120, r=140, t=50, b=190),
+        xaxis_title="",
+        yaxis_title="",
+    )
+
+    # =========================
+    # "TABELINHA" abaixo de cada mês (3 linhas)
+    # =========================
+    def _fmt_int(v: int) -> str:
+        return f"{int(v):,}".replace(",", ".")
+
+    y_base = -0.33   # mais negativo = mais para baixo
+    dy_tab = 0.055   # espaçamento ENTRE as linhas
+
+    for _, r in tab.iterrows():
+        mes = r["MÊS"]
+
+        p = _fmt_int(r["PROCEDENTE"])
+        i = _fmt_int(r["IMPROCEDENTE"])
+        t = _fmt_int(r["TOTAL"])
+
+        fig.add_annotation(
+            x=mes, xref="x",
+            yref="paper", y=y_base,
+            text=f"<span style='font-family:monospace;font-size:14px;color:{COR_PROC};'><b>{p}</b></span>",
+            showarrow=False, align="center",
+        )
+        fig.add_annotation(
+            x=mes, xref="x",
+            yref="paper", y=y_base - dy_tab,
+            text=f"<span style='font-family:monospace;font-size:14px;color:{COR_IMP};'><b>{i}</b></span>",
+            showarrow=False, align="center",
+        )
+        fig.add_annotation(
+            x=mes, xref="x",
+            yref="paper", y=y_base - (2 * dy_tab),
+            text=f"<span style='font-family:monospace;font-size:14px;color:#fcba03;'><b>{t}</b></span>",
+            showarrow=False, align="center",
+        )
+
+    # =========================
+    # LEGENDA (boquinhas) alinhada com a tabelinha mensal
+    # =========================
+    # Ajuste fino aqui:
+    x_leg = -0.10
+    y_leg = y_base  # mesma altura da primeira linha da tabelinha
+    dy_leg = dy_tab
+
+    fig.add_annotation(
+        xref="paper", yref="paper",
+        x=x_leg, y=y_leg,
+        text=(
+            f"<span style='color:{COR_PROC};font-size:16px'>■</span> "
+            "<span style='color:white;font-size:14px'><b>PROCEDENTE</b></span>"
+        ),
+        showarrow=False, align="left",
+    )
+    fig.add_annotation(
+        xref="paper", yref="paper",
+        x=x_leg, y=y_leg - dy_leg,
+        text=(
+            f"<span style='color:{COR_IMP};font-size:16px'>■</span> "
+            "<span style='color:white;font-size:14px'><b>IMPROCEDENTE</b></span>"
+        ),
+        showarrow=False, align="left",
+    )
+    fig.add_annotation(
+        xref="paper", yref="paper",
+        x=x_leg, y=y_leg - (2 * dy_leg),
+        text=(
+            "<span style='color:#fcba03;font-size:16px'>■</span> "
+            "<span style='color:white;font-size:14px'><b>TOTAL</b></span>"
+        ),
+        showarrow=False, align="left",
+    )
+
+    # =========================
+    # TOTAL GERAL (quadrado à direita)
+    # =========================
+    total_geral = int(tab["TOTAL"].sum())
+    total_geral_fmt = f"{total_geral:,}".replace(",", ".")
+
+    fig.add_annotation(
+        xref="paper", yref="paper",
+        x=1.07,
+        y=0.55,
+        text=(
+            "<span style='font-size:12px;color:#fcba03'><b>TOTAL</b></span><br>"
+            f"<span style='font-size:18px;color:#fcba03'><b>{total_geral_fmt}</b></span>"
+        ),
+        showarrow=False,
+        align="center",
+        bgcolor="rgba(0,0,0,0.45)",
+        bordercolor="#fcba03",
+        borderwidth=1,
+        borderpad=10,
+    )
+
+    return fig, tabela_final
 
 def resumo_por_localidade_html(df_base, col_local, selecionado, top_n=12):
     if col_local is None or df_base.empty:
@@ -403,7 +554,6 @@ def resumo_por_localidade_html(df_base, col_local, selecionado, top_n=12):
         qtd_fmt = f"{qtd:,}".replace(",", ".")
         linhas.append(f'<div class="{cls}"><span>{loc}</span><span>{qtd_fmt}</span></div>')
     return "\n".join(linhas)
-
 # ======================================================
 # BOTÃO ATUALIZAR BASE
 # ======================================================
